@@ -1,7 +1,8 @@
 import 'dotenv/config'
 import cors from 'cors'
-import express from 'express'
+import express, { type NextFunction, type Request, type Response } from 'express'
 import { prisma } from './db.js'
+import { authRouter } from './routes/auth.js'
 
 const app = express()
 app.use(cors())
@@ -23,8 +24,18 @@ app.get('/api/modes', async (_req, res) => {
   res.json(modes)
 })
 
-// Día 5: /api/auth/register, /api/auth/login, /api/games/start,
-// /api/games/:id/finish y /api/leaderboard
+app.use('/api/auth', authRouter)
+
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Ruta no encontrada' })
+})
+
+// Cualquier error no previsto: respuesta genérica en español, el detalle solo en el log
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const status = typeof err === 'object' && err && 'status' in err ? Number(err.status) : 500
+  if (status >= 500) console.error(err)
+  res.status(status).json({ error: status >= 500 ? 'Error del servidor, inténtalo de nuevo' : 'Petición no válida' })
+})
 
 const port = Number(process.env.PORT ?? 3000)
 app.listen(port, () => {
