@@ -163,6 +163,7 @@ export class ArenaScene extends Phaser.Scene {
     s.grow += food.golden ? 3 : 1
     s.score += food.golden ? POINTS.goldenFood : POINTS.food
     s.foodsEaten++
+    if (s.isPlayer) EventBus.emit('food-eaten', food.golden)
     if (s.isPlayer && this.mode === 'classic' && s.foodsEaten % 5 === 0) {
       this.stepMs = Math.max(MIN_STEP_MS, this.stepMs - 8)
     }
@@ -209,6 +210,7 @@ export class ArenaScene extends Phaser.Scene {
   private gameOver(killer: Snake | null) {
     this.over = true
     this.cameras.main.shake(250, 0.01)
+    EventBus.emit('player-died')
     const ranking = this.rankingRows()
     const stats: GameOverStats = {
       mode: this.mode,

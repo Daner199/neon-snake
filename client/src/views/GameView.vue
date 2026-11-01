@@ -5,8 +5,10 @@ import { api, ApiError } from '../api'
 import GameCanvas from '../components/GameCanvas.vue'
 import { EventBus } from '../game/EventBus'
 import type { GameOverStats, LeaderboardRow } from '../game/scenes/ArenaScene'
+import { sounds, unlockAudio } from '../sound'
 import { useAuthStore } from '../stores/auth'
 import { useGameStore } from '../stores/game'
+import { useSettingsStore } from '../stores/settings'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
 
@@ -14,6 +16,7 @@ const route = useRoute()
 const mode = route.params.modo === 'classic' ? 'classic' : 'arena'
 const store = useGameStore()
 const auth = useAuthStore()
+const settings = useSettingsStore()
 const paused = ref(false)
 const saveStatus = ref<SaveStatus>('idle')
 const saveMessage = ref('')
@@ -94,12 +97,25 @@ const onKey = (e: KeyboardEvent) => {
   if (e.key === 'Enter' && store.gameOver) playAgain()
 }
 
+// Sonidos: Phaser avisa por el EventBus y aquí se reproducen si no está silenciado
+const ifSound = (fn: () => void) => () => {
+  if (!settings.muted) fn()
+}
+const onFoodEaten = (golden: boolean) => ifSound(golden ? sounds.golden : sounds.eat)()
+const onBotKilled = ifSound(sounds.kill)
+const onPlayerDied = ifSound(sounds.die)
+
 onMounted(() => {
   EventBus.on('score-changed', onScore)
   EventBus.on('leaderboard', onLeaderboard)
   EventBus.on('feed', onFeed)
   EventBus.on('game-over', onGameOver)
+  EventBus.on('food-eaten', onFoodEaten)
+  EventBus.on('bot-killed', onBotKilled)
+  EventBus.on('player-died', onPlayerDied)
   window.addEventListener('keydown', onKey)
+  window.addEventListener('keydown', unlockAudio, { once: true })
+  window.addEventListener('pointerdown', unlockAudio, { once: true })
 })
 
 onBeforeUnmount(() => {
@@ -107,7 +123,12 @@ onBeforeUnmount(() => {
   EventBus.off('leaderboard', onLeaderboard)
   EventBus.off('feed', onFeed)
   EventBus.off('game-over', onGameOver)
+  EventBus.off('food-eaten', onFoodEaten)
+  EventBus.off('bot-killed', onBotKilled)
+  EventBus.off('player-died', onPlayerDied)
   window.removeEventListener('keydown', onKey)
+  window.removeEventListener('keydown', unlockAudio)
+  window.removeEventListener('pointerdown', unlockAudio)
 })
 </script>
 
@@ -121,6 +142,16 @@ onBeforeUnmount(() => {
         <div><span>RÉCORD</span><strong class="oro">{{ store.bestScore }}</strong></div>
       </div>
       <div class="acciones">
+        <button
+          class="btn sonido"
+          type="button"
+          :aria-label="settings.muted ? 'Activar sonido' : 'Silenciar'"
+          :aria-pressed="settings.muted"
+          :title="settings.muted ? 'Activar sonido' : 'Silenciar'"
+          @click="settings.toggleMute()"
+        >
+          {{ settings.muted ? '🔇' : '🔊' }}
+        </button>
         <button class="btn" type="button" :aria-label="paused ? 'Continuar' : 'Pausar'" @click="togglePause">
           {{ paused ? 'Continuar' : 'Pausa' }}
         </button>
@@ -152,6 +183,9 @@ onBeforeUnmount(() => {
         <div class="tarjeta">
           <h2 class="titulo-capa">PAUSA</h2>
           <button class="btn btn--primario" type="button" @click="togglePause">Continuar</button>
+          <button class="btn" type="button" :aria-pressed="settings.muted" @click="settings.toggleMute()">
+            {{ settings.muted ? '🔇 Sonido apagado' : '🔊 Sonido encendido' }}
+          </button>
           <RouterLink class="btn" to="/">Salir al menú</RouterLink>
         </div>
       </div>
@@ -246,6 +280,11 @@ onBeforeUnmount(() => {
 }
 .hud .btn {
   min-height: 44px;
+}
+.hud .sonido {
+  width: 44px;
+  padding: 0;
+  font-size: 18px;
 }
 .escenario {
   position: relative;
