@@ -323,7 +323,7 @@ export class ArenaScene extends Phaser.Scene {
     const cy = h.y * CELL + CELL / 2 + s.dir.y * 3
     const px = s.dir.y * 4
     const py = s.dir.x * 4
-    this.gfx.fillStyle(0x0b0f1a, 1)
+    this.gfx.fillStyle(COLORS.background, 1)
     this.gfx.fillCircle(cx + px, cy + py, 2)
     this.gfx.fillCircle(cx - px, cy - py, 2)
   }

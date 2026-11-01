@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { CELL, COLS, ROWS } from './constants'
+import { CELL, COLORS, COLS, ROWS } from './constants'
 import { ArenaScene } from './scenes/ArenaScene'
 
 export function createGame(parent: string, mode: string): Phaser.Game {
@@ -8,7 +8,7 @@ export function createGame(parent: string, mode: string): Phaser.Game {
     parent,
     width: COLS * CELL,
     height: ROWS * CELL,
-    backgroundColor: '#0b0f1a',
+    backgroundColor: COLORS.background,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: [ArenaScene],
     callbacks: {

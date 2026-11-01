@@ -316,7 +316,7 @@ onBeforeUnmount(() => {
 .feed li {
   padding: 6px 16px;
   border-radius: 999px;
-  background: rgba(18, 26, 43, 0.85);
+  background: color-mix(in srgb, var(--color-superficie) 85%, transparent);
   border: 1px solid var(--color-borde);
   font-size: 14px;
   white-space: nowrap;
@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
   width: 250px;
   padding: 14px;
   border-radius: 14px;
-  background: rgba(18, 26, 43, 0.85);
+  background: color-mix(in srgb, var(--color-superficie) 85%, transparent);
   border: 1px solid var(--color-borde);
 }
 .ranking h2 {
@@ -364,7 +364,7 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 .ranking li.yo {
-  background: rgba(57, 255, 20, 0.14);
+  background: color-mix(in srgb, var(--color-primario) 14%, transparent);
   font-weight: 700;
 }
 .pos {
@@ -395,7 +395,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(11, 15, 26, 0.7);
+  background: color-mix(in srgb, var(--color-fondo) 70%, transparent);
   backdrop-filter: blur(3px);
   padding: 16px;
   overflow-y: auto;

@@ -15,7 +15,9 @@ export const POINTS = {
   kill: 100,
 } as const
 
+// Los mismos colores que las variables de style.css, en el formato numérico de Phaser
 export const COLORS = {
+  background: 0x0b0f1a,
   player: 0x39ff14,
   food: 0xff2e88,
   golden: 0xffc83d,
