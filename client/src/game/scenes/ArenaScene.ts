@@ -130,6 +130,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.scale.off('resize', this.updateCamera, this))
     this.setupInput()
     this.setupEvents()
+    this.watchRenderer()
     this.renderFood()
     this.renderSnakes(1)
     this.emitHud()
@@ -621,6 +622,14 @@ export class ArenaScene extends Phaser.Scene {
       EventBus.off('restart', onRestart)
       EventBus.off('turn', onTurn)
     })
+  }
+
+  // Si el navegador pierde el contexto WebGL (poca memoria, app en segundo plano), Vue avisa y ofrece reintentar
+  private watchRenderer() {
+    const canvas = this.game.canvas
+    const onLost = () => EventBus.emit('render-lost')
+    canvas.addEventListener('webglcontextlost', onLost)
+    this.events.once('shutdown', () => canvas.removeEventListener('webglcontextlost', onLost))
   }
 
   private feed(text: string, mine = false) {

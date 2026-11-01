@@ -3,29 +3,58 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type Phaser from 'phaser'
 import { EventBus } from '../game/EventBus'
 
+// Si el juego no arranca en este tiempo (WebGL bloqueado, poca memoria...), se avisa y se ofrece reintentar
+const START_TIMEOUT_MS = 8000
+
 const props = defineProps<{ mode: string }>()
 let game: Phaser.Game | null = null
 let unmounted = false
+let timer: ReturnType<typeof setTimeout> | undefined
 const loading = ref(true)
 const failed = ref(false)
 
-const onReady = () => (loading.value = false)
-const reload = () => window.location.reload()
+const onReady = () => {
+  loading.value = false
+  failed.value = false
+  clearTimeout(timer)
+}
 
-onMounted(async () => {
-  EventBus.on('scene-ready', onReady)
+// El contexto gráfico se perdió a mitad de partida: mismo aviso, con Reintentar
+const onRenderLost = () => {
+  clearTimeout(timer)
+  loading.value = true
+  failed.value = true
+}
+
+async function start() {
+  loading.value = true
+  failed.value = false
+  clearTimeout(timer)
+  timer = setTimeout(() => (failed.value = loading.value), START_TIMEOUT_MS)
   try {
     // Phaser se descarga aparte: mientras tanto se ve la pantalla de carga
     const { createGame } = await import('../game/config')
-    if (!unmounted) game = createGame('game-container', props.mode)
+    if (unmounted) return
+    // Al reintentar, el juego anterior puede no terminar de destruirse (su bucle se paró): se quita su lienzo
+    game?.destroy(true)
+    document.getElementById('game-container')?.replaceChildren()
+    game = createGame('game-container', props.mode)
   } catch {
     failed.value = true
   }
+}
+
+onMounted(() => {
+  EventBus.on('scene-ready', onReady)
+  EventBus.on('render-lost', onRenderLost)
+  start()
 })
 
 onBeforeUnmount(() => {
   unmounted = true
+  clearTimeout(timer)
   EventBus.off('scene-ready', onReady)
+  EventBus.off('render-lost', onRenderLost)
   game?.destroy(true)
   game = null
 })
@@ -37,8 +66,8 @@ onBeforeUnmount(() => {
     <div v-if="loading" class="carga" role="status">
       <img class="logo" src="/logo.svg" alt="" width="72" height="72" />
       <template v-if="failed">
-        <p>No se pudo cargar el juego.</p>
-        <button class="btn btn--primario" type="button" @click="reload">Recargar</button>
+        <p>Tu navegador no pudo iniciar el juego</p>
+        <button class="btn btn--primario" type="button" @click="start">Reintentar</button>
       </template>
       <template v-else>
         <p>Cargando la arena…</p>
