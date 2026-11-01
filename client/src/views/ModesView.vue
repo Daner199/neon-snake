@@ -1,7 +1,9 @@
 <template>
   <main class="pagina">
-    <RouterLink class="btn" to="/">Volver</RouterLink>
-    <h1 class="titulo">ELIGE UN MODO</h1>
+    <header class="cabecera">
+      <RouterLink class="btn" to="/">‹ Volver</RouterLink>
+      <h1 class="titulo">ELIGE UN MODO</h1>
+    </header>
     <div class="modos">
       <RouterLink class="modo" to="/jugar/arena">
         <h2>Arena con bots</h2>
@@ -23,6 +25,12 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 24px;
+}
+.cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 24px;
 }
 .titulo {

@@ -1,18 +1,19 @@
 <template>
   <main class="menu">
+    <RouterLink class="btn btn--sesion" to="/login">Iniciar sesión</RouterLink>
     <h1 class="titulo">NEON SNAKE</h1>
     <p class="lema">Come, crece y haz chocar a los bots contra tu cola.</p>
     <RouterLink class="btn btn--primario btn--grande" to="/jugar/arena">Jugar ahora</RouterLink>
     <nav class="opciones">
       <RouterLink class="btn" to="/modos">Elegir modo</RouterLink>
       <RouterLink class="btn" to="/ranking">Ranking</RouterLink>
-      <RouterLink class="btn" to="/login">Iniciar sesión</RouterLink>
     </nav>
   </main>
 </template>
 
 <style scoped>
 .menu {
+  position: relative;
   min-height: 100%;
   display: flex;
   flex-direction: column;
@@ -21,6 +22,14 @@
   gap: 20px;
   padding: 24px;
   text-align: center;
+}
+.btn--sesion {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  border-color: var(--color-primario);
+  background: transparent;
+  color: var(--color-primario);
 }
 .titulo {
   margin: 0;
