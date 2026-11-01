@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, ApiError } from '../api'
 import GameCanvas from '../components/GameCanvas.vue'
@@ -22,6 +22,27 @@ const saveStatus = ref<SaveStatus>('idle')
 const saveMessage = ref('')
 
 store.start(mode)
+
+// Celular o ventana estrecha: HUD en una fila, píldora de puesto en vez del panel y feed abajo
+const compactQuery = window.matchMedia('(pointer: coarse), (max-width: 767px)')
+const compact = ref(compactQuery.matches)
+const updateCompact = () => (compact.value = compactQuery.matches)
+
+const playerRank = computed(() => store.leaderboard.findIndex((r) => r.isPlayer) + 1)
+const playersText = computed(() => {
+  const n = store.leaderboard.length
+  return `${n} ${n === 1 ? 'jugador' : 'jugadores'}`
+})
+const feedItems = computed(() => (compact.value ? store.feed.slice(0, 2) : store.feed))
+
+// Top 5 desplegable desde la píldora: se cierra al tocar otra vez o a los 3 segundos
+const showTop = ref(false)
+let topTimer: ReturnType<typeof setTimeout> | undefined
+function toggleTop() {
+  showTop.value = !showTop.value
+  clearTimeout(topTimer)
+  if (showTop.value) topTimer = setTimeout(() => (showTop.value = false), 3000)
+}
 
 // Guarda la partida en el servidor si hay sesión; los invitados no entran al ranking
 async function saveGame(stats: GameOverStats) {
@@ -114,6 +135,7 @@ onMounted(() => {
   EventBus.on('bot-killed', onBotKilled)
   EventBus.on('player-died', onPlayerDied)
   window.addEventListener('keydown', onKey)
+  compactQuery.addEventListener('change', updateCompact)
   window.addEventListener('keydown', unlockAudio, { once: true })
   window.addEventListener('pointerdown', unlockAudio, { once: true })
 })
@@ -127,20 +149,25 @@ onBeforeUnmount(() => {
   EventBus.off('bot-killed', onBotKilled)
   EventBus.off('player-died', onPlayerDied)
   window.removeEventListener('keydown', onKey)
+  compactQuery.removeEventListener('change', updateCompact)
+  clearTimeout(topTimer)
   window.removeEventListener('keydown', unlockAudio)
   window.removeEventListener('pointerdown', unlockAudio)
 })
 </script>
 
 <template>
-  <div class="juego">
+  <div class="juego" :class="{ compacto: compact }">
     <header class="hud">
       <div class="marcador">
         <div><span>PUNTOS</span><strong>{{ store.score }}</strong></div>
-        <div v-if="mode === 'arena'"><span>ELIMINADOS</span><strong class="rosa">{{ store.botsKilled }}</strong></div>
-        <div v-if="mode === 'arena'"><span>SERPIENTES</span><strong class="blanco">{{ store.leaderboard.length }}</strong></div>
+        <template v-if="mode === 'arena'">
+          <div><span>ELIMINADOS</span><strong class="rosa">{{ store.botsKilled }}</strong></div>
+          <div><span>SERPIENTES</span><strong class="blanco">{{ store.leaderboard.length }}</strong></div>
+          <div v-if="compact"><span>PUESTO</span><strong class="oro">{{ playerRank }}</strong></div>
+        </template>
         <div v-else><span>TAMAÑO</span><strong class="blanco">{{ store.length }}</strong></div>
-        <div><span>RÉCORD</span><strong class="oro">{{ store.bestScore }}</strong></div>
+        <div v-if="!compact || mode === 'classic'"><span>RÉCORD</span><strong class="oro">{{ store.bestScore }}</strong></div>
       </div>
       <div class="acciones">
         <button
@@ -154,21 +181,35 @@ onBeforeUnmount(() => {
           {{ settings.muted ? '🔇' : '🔊' }}
         </button>
         <button class="btn" type="button" :aria-label="paused ? 'Continuar' : 'Pausar'" @click="togglePause">
-          {{ paused ? 'Continuar' : 'Pausa' }}
+          {{ compact ? (paused ? '▶' : '⏸') : paused ? 'Continuar' : 'Pausa' }}
         </button>
-        <RouterLink class="btn" to="/">Salir</RouterLink>
+        <RouterLink class="btn" to="/" aria-label="Salir">{{ compact ? '✕' : 'Salir' }}</RouterLink>
       </div>
     </header>
 
     <div class="escenario">
       <GameCanvas :mode="mode" />
 
-      <TransitionGroup tag="ul" name="feed" class="feed" aria-live="polite">
-        <li v-for="f in store.feed" :key="f.id" :class="{ mio: f.mine }">{{ f.text }}</li>
+      <TransitionGroup tag="ul" name="feed" class="feed" :class="{ abajo: compact }" aria-live="polite">
+        <li v-for="f in feedItems" :key="f.id" :class="{ mio: f.mine }">{{ f.text }}</li>
       </TransitionGroup>
 
-      <aside v-if="mode === 'arena'" class="ranking" aria-label="Ranking de la arena">
-        <h2>EN ESTA ARENA · {{ store.leaderboard.length }}</h2>
+      <div v-if="mode === 'arena' && compact" class="puesto">
+        <button class="pildora" type="button" :aria-expanded="showTop" @click="toggleTop">
+          Puesto {{ playerRank }} de {{ store.leaderboard.length }}
+        </button>
+        <ol v-if="showTop" class="top5" aria-label="Top 5 de la arena">
+          <li v-for="(r, i) in store.leaderboard.slice(0, 5)" :key="r.id" :class="{ yo: r.isPlayer }">
+            <span class="pos">{{ i + 1 }}</span>
+            <span class="punto" :style="{ background: r.color }"></span>
+            <span class="nombre">{{ r.name }}</span>
+            <span class="pts">{{ r.score }}</span>
+          </li>
+        </ol>
+      </div>
+
+      <aside v-if="mode === 'arena' && !compact" class="ranking" aria-label="Ranking de la arena">
+        <h2>EN ESTA ARENA <span class="cuantos">· {{ playersText }}</span></h2>
         <ol>
           <li v-for="(r, i) in store.leaderboard.slice(0, 8)" :key="r.id" :class="{ yo: r.isPlayer }">
             <span class="pos">{{ i + 1 }}</span>
@@ -294,6 +335,40 @@ onBeforeUnmount(() => {
   padding: 0;
   font-size: 18px;
 }
+/* HUD compacto: una sola fila */
+.compacto .hud {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.compacto .marcador {
+  flex-wrap: nowrap;
+  gap: 14px;
+  min-width: 0;
+}
+.compacto .marcador span {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+.compacto .marcador strong {
+  font-size: 13px;
+}
+.compacto .acciones {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.compacto .hud .btn {
+  min-height: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+.compacto .hud .sonido {
+  width: 36px;
+  padding: 0;
+  font-size: 15px;
+}
 .escenario {
   position: relative;
   flex: 1;
@@ -326,6 +401,15 @@ onBeforeUnmount(() => {
   border-color: var(--color-peligro);
   font-weight: 700;
 }
+.feed.abajo {
+  top: auto;
+  bottom: 8px;
+  gap: 4px;
+}
+.feed.abajo li {
+  padding: 3px 10px;
+  font-size: 11px;
+}
 .feed-enter-from,
 .feed-leave-to {
   opacity: 0;
@@ -351,12 +435,50 @@ onBeforeUnmount(() => {
   letter-spacing: 1px;
   color: var(--color-texto-suave);
 }
+.cuantos {
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.puesto {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pildora {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-borde);
+  background: color-mix(in srgb, var(--color-superficie) 88%, transparent);
+  color: var(--color-texto);
+  font: 600 13px var(--fuente-cuerpo);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.top5 {
+  margin: 6px 0 0;
+  padding: 6px;
+  min-width: 210px;
+  list-style: none;
+  border-radius: 12px;
+  border: 1px solid var(--color-borde);
+  background: color-mix(in srgb, var(--color-superficie) 94%, transparent);
+}
+.top5 li {
+  font-size: 13px;
+}
 .ranking ol {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.ranking li {
+.ranking li,
+.top5 li {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -364,7 +486,8 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   font-size: 14px;
 }
-.ranking li.yo {
+.ranking li.yo,
+.top5 li.yo {
   background: color-mix(in srgb, var(--color-primario) 14%, transparent);
   font-weight: 700;
 }
@@ -502,13 +625,6 @@ onBeforeUnmount(() => {
     touch-action: none;
     padding: 0;
     font-size: 20px;
-  }
-  .ranking {
-    width: 170px;
-    font-size: 12px;
-  }
-  .ranking li:nth-child(n + 5) {
-    display: none;
   }
 }
 /* Celular en horizontal: la cruceta flota en una esquina para no quitar altura al tablero */
