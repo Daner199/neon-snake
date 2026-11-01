@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { cellIndex, inside, think, type Grid } from '../bots/BotBrain'
+import { cellIndex, inside, nextIsSafe, think, type Grid } from '../bots/BotBrain'
 import {
   BOT_COUNT,
   BOT_RESPAWN_MS,
@@ -83,6 +83,7 @@ export class ArenaScene extends Phaser.Scene {
   private over = false
   private startedAt = 0
   private colorIndex = 0
+  private tick = 0
 
   constructor() {
     super('ArenaScene')
@@ -98,6 +99,7 @@ export class ArenaScene extends Phaser.Scene {
     this.paused = false
     this.over = false
     this.startedAt = this.time.now
+    this.tick = 0
 
     this.frozenDrawn = false
     this.makeTextures()
@@ -146,10 +148,13 @@ export class ArenaScene extends Phaser.Scene {
   private step() {
     const all = [this.player, ...this.bots].filter((s) => s.alive)
 
-    // 1. Los bots deciden hacia dónde ir
+    // 1. Los bots deciden hacia dónde ir. Para repartir el trabajo, cada uno piensa en ticks
+    //    alternos; si va a chocar con lo que tiene delante, piensa en este mismo tick.
+    this.tick++
     const grid = this.buildGrid(all)
     for (const bot of all) {
-      if (!bot.isPlayer) bot.turn(think(bot, grid, this.foods, this.player))
+      if (bot.isPlayer) continue
+      if ((this.tick + bot.id) % 2 === 0 || !nextIsSafe(bot, grid)) bot.turn(think(bot, grid, this.foods, this.player))
     }
 
     // 2. Nuevas cabezas; la cola avanza salvo que la serpiente esté creciendo
@@ -312,12 +317,19 @@ export class ArenaScene extends Phaser.Scene {
 
   private fillFood() {
     const target = FOOD_COUNT[this.mode]
+    let normal = this.foods.reduce((n, f) => (f.golden ? n : n + 1), 0)
+    if (normal >= target) return
     const grid = this.buildGrid([this.player, ...this.bots].filter((s) => s.alive))
+    const taken = new Set(this.foods.map(cellIndex))
     let tries = 0
-    while (this.foods.filter((f) => !f.golden).length < target && tries++ < 500) {
+    while (normal < target && tries++ < 500) {
       const c = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) }
-      if (grid[cellIndex(c)] !== 0 || this.foods.some((f) => f.x === c.x && f.y === c.y)) continue
-      this.foods.push({ ...c, golden: this.mode === 'arena' && Math.random() < 0.06 })
+      const i = cellIndex(c)
+      if (grid[i] !== 0 || taken.has(i)) continue
+      const golden = this.mode === 'arena' && Math.random() < 0.06
+      this.foods.push({ ...c, golden })
+      taken.add(i)
+      if (!golden) normal++
     }
   }
 
