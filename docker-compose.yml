@@ -1,5 +1,11 @@
-# Base de datos PostgreSQL para desarrollo.
-# Arrancar: docker compose up -d    Parar: docker compose down
+# Neon Snake completo en Docker.
+#
+#   Todo el juego (como si estuviera publicado):  docker compose up -d --build
+#     -> abre http://localhost:8080  (o http://IP-DE-TU-PC:8080 desde el celular en tu Wi-Fi)
+#
+#   Solo la base de datos (para programar con npm run dev):  docker compose up -d db
+#
+#   Apagar todo:  docker compose down
 services:
   db:
     image: postgres:16
@@ -8,10 +14,37 @@ services:
       POSTGRES_USER: snake
       POSTGRES_PASSWORD: snake123
       POSTGRES_DB: neon_snake
+    # 5433 por fuera para no chocar con un PostgreSQL instalado en Windows (que usa 5432)
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snake -d neon_snake"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./server
+    container_name: neon-snake-api
+    environment:
+      DATABASE_URL: postgresql://snake:snake123@db:5432/neon_snake
+      JWT_SECRET: cambia-esto-antes-de-publicar
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build: ./client
+    container_name: neon-snake-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
 
 volumes:
   pgdata:
