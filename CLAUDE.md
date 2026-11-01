@@ -11,7 +11,7 @@ Responde y escribe todos los textos del juego en **español**.
 | Interfaz | Vue 3 + Vite + TypeScript + Pinia + Vue Router | `client/` |
 | Motor del juego | Phaser **3** (no migrar a Phaser 4) | `client/src/game/` |
 | API | Express 5 + TypeScript + Prisma 6 | `server/` |
-| Base de datos | PostgreSQL 16 en Docker | `docker-compose.yml`, `server/prisma/` |
+| Base de datos | PostgreSQL 16 en Docker (puerto 5433 en la PC) | `docker-compose.yml`, `server/prisma/` |
 
 ## Estructura y dónde va cada cosa
 
@@ -65,7 +65,7 @@ Tienda de skins, logros, reto diario, panel de administración, inglés, multiju
 ## Plan
 
 1. Día 1: estructura y base de datos (hecho)
-2. Días 2 y 3: motor (comida, crecimiento, choques) y bots con IA (buscar comida, esquivar, cazar)
+2. Días 2 y 3: motor y bots con IA (hecho: `game/Snake.ts`, `game/bots/BotBrain.ts`, `scenes/ArenaScene.ts`)
 3. Día 4: interfaz en Vue (HUD, mini ranking, pausa, Game Over, ajustes de sonido)
 4. Día 5: registro, login con JWT, guardar partidas, ranking top 10 por modo
 5. Días 6 y 7: sonido, controles táctiles, pruebas y publicación

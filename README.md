@@ -15,11 +15,23 @@ Juego de Snake para navegador con un modo **Arena con bots**: serpientes control
 - Docker Desktop (abierto)
 - Git
 
-## Cómo arrancarlo por primera vez
+## Opción A: todo el juego en Docker (como si estuviera publicado)
 
 ```bash
-# 1. Base de datos
-docker compose up -d
+docker compose up -d --build
+```
+
+Abre **http://localhost:8080**. Docker levanta tres contenedores: la base de datos, la API y el juego (servido con nginx). La primera vez tarda unos minutos.
+
+**Desde el celular:** conéctalo al mismo Wi-Fi que tu PC y abre `http://IP-DE-TU-PC:8080`. La IP la ves en PowerShell con `ipconfig` (línea "Dirección IPv4", por ejemplo `192.168.1.40`). Si no carga, permite Docker en el Firewall de Windows.
+
+Para apagarlo: `docker compose down`.
+
+## Opción B: para programar (con recarga automática)
+
+```bash
+# 1. Solo la base de datos (queda en el puerto 5433)
+docker compose up -d db
 
 # 2. Servidor (en una terminal)
 cd server
@@ -36,6 +48,9 @@ npm install
 npm run dev
 # -> abre http://localhost:5173
 ```
+
+Si `npm run build` del cliente falla con "memory allocation failed" (poca RAM libre), en PowerShell:
+`$env:RAYON_NUM_THREADS='1'; $env:TOKIO_WORKER_THREADS='1'; npm run build`
 
 ## Estructura
 
@@ -62,12 +77,13 @@ neon-snake/
 | `client/` | `npm run build` | Versión para publicar |
 | `server/` | `npm run dev` | API con recarga automática |
 | `server/` | `npm run db:studio` | Ver y editar las tablas en el navegador |
-| raíz | `docker compose down` | Apagar la base de datos |
+| raíz | `docker compose up -d --build` | Todo el juego en http://localhost:8080 |
+| raíz | `docker compose down` | Apagar los contenedores |
 
 ## Plan de la semana
 
 1. Día 1: estructura del proyecto y base de datos ✅
-2. Días 2 y 3: motor del juego (comida, colisiones, crecimiento) y bots con IA
-3. Día 4: pantallas en Vue (HUD, pausa, Game Over)
+2. Días 2 y 3: motor del juego y arena con bots ✅
+3. Día 4: pantallas en Vue (HUD, ranking en vivo, pausa, Game Over) ✅ (falta ajustes de sonido)
 4. Día 5: registro, login, guardar partidas y ranking
 5. Días 6 y 7: sonido, móvil, pruebas y publicación
