@@ -221,12 +221,12 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="cruceta" aria-label="Controles táctiles">
-      <button class="btn" type="button" aria-label="Arriba" @click="turn('up')">▲</button>
+      <button class="btn" type="button" aria-label="Arriba" @pointerdown.prevent="turn('up')">▲</button>
       <div>
-        <button class="btn" type="button" aria-label="Izquierda" @click="turn('left')">◀</button>
-        <button class="btn" type="button" aria-label="Derecha" @click="turn('right')">▶</button>
+        <button class="btn" type="button" aria-label="Izquierda" @pointerdown.prevent="turn('left')">◀</button>
+        <button class="btn" type="button" aria-label="Derecha" @pointerdown.prevent="turn('right')">▶</button>
       </div>
-      <button class="btn" type="button" aria-label="Abajo" @click="turn('down')">▼</button>
+      <button class="btn" type="button" aria-label="Abajo" @pointerdown.prevent="turn('down')">▼</button>
     </div>
   </div>
 </template>
@@ -237,6 +237,13 @@ onBeforeUnmount(() => {
   height: 100dvh;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* En el celular: sin zoom con doble toque ni arrastrar la página */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .hud {
   display: flex;
@@ -290,6 +297,7 @@ onBeforeUnmount(() => {
   position: relative;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 .feed {
   position: absolute;
@@ -390,6 +398,8 @@ onBeforeUnmount(() => {
   background: rgba(11, 15, 26, 0.7);
   backdrop-filter: blur(3px);
   padding: 16px;
+  overflow-y: auto;
+  touch-action: pan-y;
 }
 .tarjeta {
   width: min(520px, 100%);
@@ -479,15 +489,16 @@ onBeforeUnmount(() => {
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding: 8px 0 16px;
+    padding: 8px 0 max(16px, env(safe-area-inset-bottom));
   }
   .cruceta div {
     display: flex;
     gap: 64px;
   }
   .cruceta .btn {
-    width: 60px;
-    height: 60px;
+    width: 64px;
+    height: 64px;
+    touch-action: none;
     padding: 0;
     font-size: 20px;
   }
@@ -497,6 +508,23 @@ onBeforeUnmount(() => {
   }
   .ranking li:nth-child(n + 5) {
     display: none;
+  }
+}
+/* Celular en horizontal: la cruceta flota en una esquina para no quitar altura al tablero */
+@media (pointer: coarse) and (orientation: landscape) {
+  .cruceta {
+    position: absolute;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: 8px;
+    padding: 0;
+    opacity: 0.85;
+  }
+  .cruceta div {
+    gap: 52px;
+  }
+  .cruceta .btn {
+    width: 52px;
+    height: 52px;
   }
 }
 </style>

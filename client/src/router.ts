@@ -6,8 +6,9 @@ export default createRouter({
   routes: [
     { path: '/', name: 'menu', component: MenuView },
     { path: '/modos', name: 'modos', component: () => import('./views/ModesView.vue') },
-    { path: '/jugar/:modo', name: 'jugar', component: () => import('./views/GameView.vue') },
+    { path: '/jugar/:modo(arena|classic)', name: 'jugar', component: () => import('./views/GameView.vue') },
     { path: '/ranking', name: 'ranking', component: () => import('./views/RankingView.vue') },
     { path: '/login', name: 'login', component: () => import('./views/LoginView.vue') },
+    { path: '/:pathMatch(.*)*', name: 'no-encontrada', component: () => import('./views/NotFoundView.vue') },
   ],
 })

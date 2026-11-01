@@ -89,6 +89,7 @@ export class ArenaScene extends Phaser.Scene {
     this.draw()
     this.emitHud()
     this.emitLeaderboard()
+    EventBus.emit('scene-ready')
   }
 
   update(_time: number, delta: number) {
