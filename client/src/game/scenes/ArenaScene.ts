@@ -114,11 +114,12 @@ export class ArenaScene extends Phaser.Scene {
 
     // 2. Nuevas cabezas; la cola avanza salvo que la serpiente esté creciendo
     const heads = new Map<Snake, Cell>()
+    const tails = new Map<Snake, Cell>() // cola quitada en este paso, por si la serpiente muere
     for (const s of all) {
       s.dir = s.nextDir
       heads.set(s, s.nextHead())
       if (s.grow > 0) s.grow--
-      else s.cells.shift()
+      else tails.set(s, s.cells.shift()!)
     }
 
     // 3. Choques contra paredes, cuerpos y cabezas
@@ -152,8 +153,12 @@ export class ArenaScene extends Phaser.Scene {
       if (fi >= 0) this.eat(s, this.foods.splice(fi, 1)[0])
     }
 
-    // 5. Eliminaciones
-    for (const [victim, killer] of deaths) this.kill(victim, killer)
+    // 5. Eliminaciones: quien muere no avanzó, así que recupera su cola (si no, perdería un segmento)
+    for (const [victim, killer] of deaths) {
+      const tail = tails.get(victim)
+      if (tail) victim.cells.unshift(tail)
+      this.kill(victim, killer)
+    }
 
     this.fillFood()
     this.emitHud()
