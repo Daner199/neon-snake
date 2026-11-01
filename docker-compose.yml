@@ -1,0 +1,17 @@
+# Base de datos PostgreSQL para desarrollo.
+# Arrancar: docker compose up -d    Parar: docker compose down
+services:
+  db:
+    image: postgres:16
+    container_name: neon-snake-db
+    environment:
+      POSTGRES_USER: snake
+      POSTGRES_PASSWORD: snake123
+      POSTGRES_DB: neon_snake
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

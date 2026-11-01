@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  username     String        @unique
+  email        String?       @unique
+  passwordHash String        @map("password_hash")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  games        GameSession[]
+
+  @@map("users")
+}
+
+model GameMode {
+  id    Int           @id @default(autoincrement())
+  code  String        @unique // "arena" o "classic"
+  name  String
+  games GameSession[]
+
+  @@map("game_modes")
+}
+
+model GameSession {
+  id         String    @id @default(uuid())
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String?   @map("user_id")
+  mode       GameMode  @relation(fields: [modeId], references: [id])
+  modeId     Int       @map("mode_id")
+  status     String    @default("started") // started, finished, rejected
+  score      Int       @default(0)
+  length     Int       @default(3)
+  foodsEaten Int       @default(0) @map("foods_eaten")
+  botsKilled Int       @default(0) @map("bots_killed")
+  durationMs Int       @default(0) @map("duration_ms")
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  @@index([modeId, score(sort: Desc)])
+  @@map("game_sessions")
+}
