@@ -1,9 +1,6 @@
 import Phaser from 'phaser'
+import { CELL, COLS, ROWS } from '../constants'
 import { EventBus } from '../EventBus'
-
-const CELL = 20
-const COLS = 64
-const ROWS = 40
 
 type Cell = { x: number; y: number }
 

@@ -1,9 +1,6 @@
 import Phaser from 'phaser'
+import { CELL, COLS, ROWS } from './constants'
 import { ArenaScene } from './scenes/ArenaScene'
-
-export const CELL = 20 // tamaño de cada celda en píxeles
-export const COLS = 64
-export const ROWS = 40
 
 export function createGame(parent: string, mode: string): Phaser.Game {
   return new Phaser.Game({
