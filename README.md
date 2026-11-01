@@ -6,7 +6,7 @@ Juego de Snake para navegador con un modo **Arena con bots**: serpientes control
 | --- | --- | --- |
 | Interfaz | Vue 3 + Vite + TypeScript + Pinia + Vue Router | `client/` |
 | Motor del juego | Phaser 3 | `client/src/game/` |
-| API | Node.js + Express + TypeScript | `server/` |
+| API | Node.js + Express 5 + TypeScript + Prisma 6 | `server/` |
 | Base de datos | PostgreSQL 16 (Docker) + Prisma | `docker-compose.yml`, `server/prisma/` |
 
 ## Requisitos
@@ -18,6 +18,7 @@ Juego de Snake para navegador con un modo **Arena con bots**: serpientes control
 ## Opción A: todo el juego en Docker (como si estuviera publicado)
 
 ```bash
+cp .env.example .env   # opcional: cambia JWT_SECRET
 docker compose up -d --build
 ```
 
@@ -56,18 +57,38 @@ Si `npm run build` del cliente falla con "memory allocation failed" (poca RAM li
 
 ```
 neon-snake/
-├── client/                 Interfaz y juego
-│   └── src/
-│       ├── views/          Pantallas: menú, modos, juego, ranking, login
-│       ├── components/     GameCanvas.vue monta Phaser dentro de Vue
-│       ├── game/           Escenas de Phaser y EventBus (Vue <-> Phaser)
-│       └── stores/         Estado compartido (Pinia)
-├── server/                 API
-│   ├── src/index.ts        Rutas de Express
-│   └── prisma/             Tablas (schema.prisma), migraciones y datos iniciales
-├── docs/mockups/           Diseño de las pantallas
-└── docker-compose.yml      PostgreSQL
+├── client/                    Interfaz y juego
+│   ├── src/
+│   │   ├── views/             Pantallas: menú, modos, juego, ranking, login, 404
+│   │   ├── components/        GameCanvas.vue monta Phaser dentro de Vue
+│   │   ├── game/              Escenas de Phaser, bots y EventBus (Vue <-> Phaser)
+│   │   ├── stores/            Estado compartido (Pinia): partida, sesión y ajustes
+│   │   ├── api.ts             Llamadas a /api
+│   │   └── sound.ts           Efectos de sonido con Web Audio
+│   ├── Dockerfile             Compila el juego y lo sirve con nginx
+│   └── nginx.conf.template    nginx: usa las variables PORT y API_URL
+├── server/                    API
+│   ├── src/
+│   │   ├── index.ts           Arranque de Express, seguridad y rutas
+│   │   ├── routes/            /api/auth, /api/sessions, /api/ranking
+│   │   ├── middleware/        requireAuth (token JWT)
+│   │   └── services/          Tokens y ranking
+│   ├── prisma/                Tablas (schema.prisma), migraciones y datos iniciales
+│   └── Dockerfile             Migra la base de datos y levanta la API
+├── docs/mockups/              Diseño de las pantallas
+├── .env.example               Todas las variables de entorno
+└── docker-compose.yml         Base de datos, API y web
 ```
+
+## API
+
+| Método | Ruta | Qué hace |
+| --- | --- | --- |
+| GET | `/api/health` | Comprueba la API y la base de datos |
+| POST | `/api/auth/register` | Crea una cuenta (`username`, `email`, `password`) y devuelve el token |
+| POST | `/api/auth/login` | Inicia sesión (`username`, `password`) y devuelve el token |
+| POST | `/api/sessions` | Guarda una partida (requiere token) |
+| GET | `/api/ranking/:modo` | Top 10 de `arena` o `classic` (con token, también tu puesto) |
 
 ## Comandos útiles
 
@@ -76,14 +97,46 @@ neon-snake/
 | `client/` | `npm run dev` | Juego en modo desarrollo |
 | `client/` | `npm run build` | Versión para publicar |
 | `server/` | `npm run dev` | API con recarga automática |
+| `server/` | `npm run build` | Compila la API |
 | `server/` | `npm run db:studio` | Ver y editar las tablas en el navegador |
 | raíz | `docker compose up -d --build` | Todo el juego en http://localhost:8080 |
 | raíz | `docker compose down` | Apagar los contenedores |
+
+## Publicar en Railway
+
+El juego se publica como **tres servicios** en un mismo proyecto de Railway: la base de datos, la API (`server/`) y la web (`client/`, nginx). Solo la web tiene dominio público; nginx pasa las llamadas a `/api` a la API por la red privada de Railway, así que no hace falta CORS.
+
+1. Sube el código a GitHub.
+2. En [railway.com](https://railway.com): **New Project → Deploy from GitHub repo** y elige `neon-snake`.
+3. Añade la base de datos: **+ Create → Database → PostgreSQL**. Railway la llama `Postgres`.
+4. **Servicio API.** En el servicio creado desde el repositorio:
+   - *Settings → Source → Root Directory:* `/server` (usa `server/Dockerfile`).
+   - Cámbiale el nombre a `api` (las variables de abajo usan ese nombre).
+   - *Variables:*
+
+     | Variable | Valor |
+     | --- | --- |
+     | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+     | `JWT_SECRET` | un texto largo y aleatorio (ver `.env.example` para generarlo) |
+     | `PORT` | `3000` |
+     | `TRUST_PROXY` | `2` |
+     | `CORS_ORIGIN` | vacío (solo si otra web va a llamar a la API) |
+
+   - *Settings → Deploy → Healthcheck Path:* `/api/health`.
+   - No le generes dominio público.
+5. **Servicio web.** **+ Create → GitHub Repo** con el mismo repositorio:
+   - *Root Directory:* `/client` (usa `client/Dockerfile`). Nómbralo `web`.
+   - *Variables:* `API_URL` = `http://${{api.RAILWAY_PRIVATE_DOMAIN}}:3000`. `PORT` lo pone Railway solo.
+   - *Settings → Networking → Generate Domain* para tener la dirección pública.
+6. Abre `https://TU-DOMINIO/api/health`: debe responder `{"ok":true,"db":"conectada"}`. Al arrancar, la API aplica las migraciones y crea los modos de juego sola.
+7. Opcional: en `client/index.html` cambia `og:image` por la URL completa (`https://TU-DOMINIO/og-image.png`) para que la vista previa salga en WhatsApp y redes.
+
+Si los jugadores comparten el límite de intentos de login (todos reciben "Demasiados intentos"), revisa `TRUST_PROXY`: debe ser el número de proxies delante de la API.
 
 ## Plan de la semana
 
 1. Día 1: estructura del proyecto y base de datos ✅
 2. Días 2 y 3: motor del juego y arena con bots ✅
-3. Día 4: pantallas en Vue (HUD, ranking en vivo, pausa, Game Over) ✅ (falta ajustes de sonido)
-4. Día 5: registro, login, guardar partidas y ranking
-5. Días 6 y 7: sonido, móvil, pruebas y publicación
+3. Día 4: pantallas en Vue (HUD, ranking en vivo, pausa, Game Over) ✅
+4. Día 5: registro, login, guardar partidas y ranking ✅
+5. Días 6 y 7: sonido ✅, móvil ✅, preparar Railway ✅, pruebas y publicación

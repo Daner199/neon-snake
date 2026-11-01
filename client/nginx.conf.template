@@ -1,0 +1,27 @@
+# Plantilla: al arrancar, nginx cambia ${PORT} y ${API_URL} por las variables de entorno
+# (en Docker local: 80 y http://api:3000; en Railway: el puerto que da Railway y la URL privada de la API).
+server {
+  listen ${PORT};
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Las llamadas a la API van al servicio de la API
+  location /api/ {
+    proxy_pass ${API_URL};
+    proxy_ssl_server_name on;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Archivos con hash en el nombre: se pueden guardar en caché mucho tiempo
+  location /assets/ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  # Vue Router: cualquier ruta (/jugar/arena, /ranking...) carga index.html
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}

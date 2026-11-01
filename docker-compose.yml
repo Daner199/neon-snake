@@ -30,7 +30,10 @@ services:
     container_name: neon-snake-api
     environment:
       DATABASE_URL: postgresql://snake:snake123@db:5432/neon_snake
-      JWT_SECRET: cambia-esto-antes-de-publicar
+      # Se leen del archivo .env de la raíz si existe (ver .env.example)
+      JWT_SECRET: ${JWT_SECRET:-cambia-esto-antes-de-publicar}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      TRUST_PROXY: 1
       PORT: 3000
     depends_on:
       db:
@@ -40,6 +43,9 @@ services:
   web:
     build: ./client
     container_name: neon-snake-web
+    environment:
+      API_URL: http://api:3000
+      PORT: 80
     ports:
       - "8080:80"
     depends_on:
