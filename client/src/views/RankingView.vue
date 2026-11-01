@@ -13,7 +13,7 @@ interface RankingRow {
 }
 
 const TABS: { mode: Mode; label: string }[] = [
-  { mode: 'arena', label: 'Arena con bots' },
+  { mode: 'arena', label: 'Arena' },
   { mode: 'classic', label: 'Clásico' },
 ]
 
@@ -77,7 +77,7 @@ watch(mode, load, { immediate: true })
       <div class="fila cabeza">
         <span>PUESTO</span>
         <span>JUGADOR</span>
-        <span v-if="mode === 'arena'" class="bots">BOTS ELIMINADOS</span>
+        <span v-if="mode === 'arena'" class="bots">ELIMINADOS</span>
         <span class="pts">PUNTOS</span>
       </div>
 
@@ -233,7 +233,7 @@ watch(mode, load, { immediate: true })
     font-size: 0;
   }
   .cabeza .bots::after {
-    content: 'BOTS';
+    content: 'ELIM.';
     font-size: 11px;
   }
 }

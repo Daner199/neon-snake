@@ -6,8 +6,8 @@ const prisma = new PrismaClient()
 async function main() {
   await prisma.gameMode.upsert({
     where: { code: 'arena' },
-    update: {},
-    create: { code: 'arena', name: 'Arena con bots' },
+    update: { name: 'Arena' },
+    create: { code: 'arena', name: 'Arena' },
   })
   await prisma.gameMode.upsert({
     where: { code: 'classic' },

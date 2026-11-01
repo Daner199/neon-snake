@@ -137,8 +137,9 @@ onBeforeUnmount(() => {
     <header class="hud">
       <div class="marcador">
         <div><span>PUNTOS</span><strong>{{ store.score }}</strong></div>
-        <div><span>LONGITUD</span><strong class="blanco">{{ store.length }}</strong></div>
-        <div v-if="mode === 'arena'"><span>BOTS ELIMINADOS</span><strong class="rosa">{{ store.botsKilled }}</strong></div>
+        <div v-if="mode === 'arena'"><span>ELIMINADOS</span><strong class="rosa">{{ store.botsKilled }}</strong></div>
+        <div v-if="mode === 'arena'"><span>SERPIENTES</span><strong class="blanco">{{ store.leaderboard.length }}</strong></div>
+        <div v-else><span>TAMAÑO</span><strong class="blanco">{{ store.length }}</strong></div>
         <div><span>RÉCORD</span><strong class="oro">{{ store.bestScore }}</strong></div>
       </div>
       <div class="acciones">
@@ -206,8 +207,8 @@ onBeforeUnmount(() => {
             {{ saveMessage }}
           </p>
           <div class="stats">
-            <div><strong>{{ store.gameOver.length }}</strong><span>Longitud</span></div>
-            <div v-if="mode === 'arena'"><strong class="rosa">{{ store.gameOver.botsKilled }}</strong><span>Bots eliminados</span></div>
+            <div><strong>{{ store.gameOver.length }}</strong><span>Tamaño final</span></div>
+            <div v-if="mode === 'arena'"><strong class="rosa">{{ store.gameOver.botsKilled }}</strong><span>Jugadores eliminados</span></div>
             <div><strong>{{ formatTime(store.gameOver.durationMs) }}</strong><span>Tiempo</span></div>
             <div v-if="mode === 'arena'"><strong>{{ store.gameOver.rank }}.º / {{ store.gameOver.players }}</strong><span>En la arena</span></div>
           </div>

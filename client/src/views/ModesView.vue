@@ -6,8 +6,8 @@
     </header>
     <div class="modos">
       <RouterLink class="modo" to="/jugar/arena">
-        <h2>Arena con bots</h2>
-        <p>Haz que los bots choquen contra tu cuerpo para eliminarlos.</p>
+        <h2>Arena</h2>
+        <p>Muchos jugadores en un mapa grande. Haz que choquen contra tu cuerpo para eliminarlos y quedarte con su comida.</p>
       </RouterLink>
       <RouterLink class="modo" to="/jugar/classic">
         <h2>Clásico</h2>

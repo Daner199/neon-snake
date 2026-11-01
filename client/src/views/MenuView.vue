@@ -12,7 +12,7 @@ const auth = useAuthStore()
       <RouterLink v-else class="btn btn--sesion" to="/login">Iniciar sesión</RouterLink>
     </header>
     <h1 class="titulo">NEON SNAKE</h1>
-    <p class="lema">Come, crece y haz chocar a los bots contra tu cola.</p>
+    <p class="lema">Come, crece y haz chocar a los demás jugadores contra tu cola.</p>
     <RouterLink class="btn btn--primario btn--grande" to="/jugar/arena">Jugar ahora</RouterLink>
     <nav class="opciones">
       <RouterLink class="btn" to="/modos">Elegir modo</RouterLink>
