@@ -5,6 +5,7 @@ import { api, ApiError } from '../api'
 import GameCanvas from '../components/GameCanvas.vue'
 import { EventBus } from '../game/EventBus'
 import type { GameOverStats, LeaderboardRow } from '../game/scenes/ArenaScene'
+import { enterGameScreen, leaveGameScreen } from '../screen'
 import { sounds, unlockAudio } from '../sound'
 import { useAuthStore } from '../stores/auth'
 import { useGameStore } from '../stores/game'
@@ -27,6 +28,19 @@ store.start(mode)
 const compactQuery = window.matchMedia('(pointer: coarse), (max-width: 767px)')
 const compact = ref(compactQuery.matches)
 const updateCompact = () => (compact.value = compactQuery.matches)
+
+// En pantallas táctiles la partida se juega en horizontal: en vertical se pausa y se pide girar
+const touchQuery = window.matchMedia('(pointer: coarse)')
+const portraitQuery = window.matchMedia('(orientation: portrait)')
+const touch = ref(touchQuery.matches)
+const portrait = ref(portraitQuery.matches)
+const mustRotate = computed(() => touch.value && portrait.value)
+const landscapeTouch = computed(() => touch.value && !portrait.value)
+function updateOrientation() {
+  touch.value = touchQuery.matches
+  portrait.value = portraitQuery.matches
+  if (mustRotate.value) pauseGame()
+}
 
 const playerRank = computed(() => store.leaderboard.findIndex((r) => r.isPlayer) + 1)
 const playersText = computed(() => {
@@ -80,6 +94,12 @@ async function saveGame(stats: GameOverStats) {
   }
 }
 
+function pauseGame() {
+  if (store.gameOver || paused.value) return
+  paused.value = true
+  EventBus.emit('pause')
+}
+
 function togglePause() {
   if (store.gameOver) return
   paused.value = !paused.value
@@ -87,6 +107,7 @@ function togglePause() {
 }
 
 function playAgain() {
+  enterGameScreen()
   store.start(mode)
   paused.value = false
   saveStatus.value = 'idle'
@@ -113,6 +134,10 @@ const onGameOver = (stats: GameOverStats) => {
   store.finish(stats)
   saveGame(stats)
 }
+// Si la escena arranca con la partida ya pausada (celular en vertical), se lo recuerda
+const onSceneReady = () => {
+  if (paused.value) EventBus.emit('pause')
+}
 const onKey = (e: KeyboardEvent) => {
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause()
   if (e.key === 'Enter' && store.gameOver) playAgain()
@@ -126,7 +151,10 @@ const onFoodEaten = (golden: boolean) => ifSound(golden ? sounds.golden : sounds
 const onBotKilled = ifSound(sounds.kill)
 const onPlayerDied = ifSound(sounds.die)
 
+if (mustRotate.value) paused.value = true
+
 onMounted(() => {
+  EventBus.on('scene-ready', onSceneReady)
   EventBus.on('score-changed', onScore)
   EventBus.on('leaderboard', onLeaderboard)
   EventBus.on('feed', onFeed)
@@ -135,12 +163,16 @@ onMounted(() => {
   EventBus.on('bot-killed', onBotKilled)
   EventBus.on('player-died', onPlayerDied)
   window.addEventListener('keydown', onKey)
-  compactQuery.addEventListener('change', updateCompact)
   window.addEventListener('keydown', unlockAudio, { once: true })
   window.addEventListener('pointerdown', unlockAudio, { once: true })
+  compactQuery.addEventListener('change', updateCompact)
+  touchQuery.addEventListener('change', updateOrientation)
+  portraitQuery.addEventListener('change', updateOrientation)
 })
 
 onBeforeUnmount(() => {
+  leaveGameScreen()
+  EventBus.off('scene-ready', onSceneReady)
   EventBus.off('score-changed', onScore)
   EventBus.off('leaderboard', onLeaderboard)
   EventBus.off('feed', onFeed)
@@ -149,15 +181,17 @@ onBeforeUnmount(() => {
   EventBus.off('bot-killed', onBotKilled)
   EventBus.off('player-died', onPlayerDied)
   window.removeEventListener('keydown', onKey)
-  compactQuery.removeEventListener('change', updateCompact)
-  clearTimeout(topTimer)
   window.removeEventListener('keydown', unlockAudio)
   window.removeEventListener('pointerdown', unlockAudio)
+  compactQuery.removeEventListener('change', updateCompact)
+  touchQuery.removeEventListener('change', updateOrientation)
+  portraitQuery.removeEventListener('change', updateOrientation)
+  clearTimeout(topTimer)
 })
 </script>
 
 <template>
-  <div class="juego" :class="{ compacto: compact }">
+  <div class="juego" :class="{ compacto: compact, horizontal: landscapeTouch }">
     <header class="hud">
       <div class="marcador">
         <div><span>PUNTOS</span><strong>{{ store.score }}</strong></div>
@@ -260,6 +294,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-if="mustRotate" class="girar" role="alert">
+      <span class="movil" aria-hidden="true"></span>
+      <p>Gira tu celular para jugar</p>
     </div>
 
     <div class="cruceta" aria-label="Controles táctiles">
@@ -516,9 +555,8 @@ onBeforeUnmount(() => {
 .capa {
   position: absolute;
   inset: 0;
+  z-index: 8;
   display: flex;
-  align-items: center;
-  justify-content: center;
   background: color-mix(in srgb, var(--color-fondo) 70%, transparent);
   backdrop-filter: blur(3px);
   padding: 16px;
@@ -526,6 +564,8 @@ onBeforeUnmount(() => {
   touch-action: pan-y;
 }
 .tarjeta {
+  /* margin: auto centra la tarjeta y, si no cabe, deja desplazarse hasta arriba */
+  margin: auto;
   width: min(520px, 100%);
   padding: 32px;
   border-radius: 22px;
@@ -627,21 +667,132 @@ onBeforeUnmount(() => {
     font-size: 20px;
   }
 }
-/* Celular en horizontal: la cruceta flota en una esquina para no quitar altura al tablero */
-@media (pointer: coarse) and (orientation: landscape) {
-  .cruceta {
-    position: absolute;
-    right: max(12px, env(safe-area-inset-right));
-    bottom: 8px;
-    padding: 0;
-    opacity: 0.85;
+/* Celular en horizontal: el tablero ocupa toda la altura y los controles van en los márgenes */
+.horizontal .escenario {
+  position: absolute;
+  inset: 0;
+}
+.horizontal .hud {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 6;
+  align-items: flex-start;
+  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0
+    max(10px, env(safe-area-inset-left));
+  pointer-events: none;
+}
+.horizontal .hud > * {
+  pointer-events: auto;
+}
+.horizontal .marcador {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.horizontal .hud .btn {
+  height: 32px;
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.horizontal .hud .sonido {
+  width: 32px;
+  padding: 0;
+}
+.horizontal .puesto {
+  top: calc(max(8px, env(safe-area-inset-top)) + 40px);
+  left: auto;
+  right: max(10px, env(safe-area-inset-right));
+  transform: none;
+  align-items: flex-end;
+}
+.horizontal .pildora {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.horizontal .cruceta {
+  position: absolute;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 6;
+  padding: 0;
+  opacity: 0.55;
+}
+.horizontal .cruceta div {
+  gap: 48px;
+}
+.horizontal .cruceta .btn {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+}
+/* En horizontal la tarjeta de pausa / Game Over es más compacta para caber en poca altura */
+.horizontal .tarjeta {
+  width: min(560px, 100%);
+  padding: 16px 20px;
+  gap: 8px;
+}
+.horizontal .titulo-capa {
+  font-size: 20px;
+}
+.horizontal .puntos {
+  font-size: 28px;
+}
+.horizontal .stats div {
+  padding: 6px;
+}
+.horizontal .grande {
+  min-height: 44px;
+  font-size: 16px;
+}
+.horizontal .tarjeta .btn {
+  min-height: 40px;
+}
+/* Aviso para girar el celular: cubre todo y la partida queda en pausa */
+.girar {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  background: var(--color-fondo);
+  text-align: center;
+}
+.girar p {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-primario);
+}
+.movil {
+  width: 56px;
+  height: 92px;
+  border: 4px solid var(--color-primario);
+  border-radius: 12px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--color-primario) 50%, transparent);
+  animation: girar 2s ease-in-out infinite;
+}
+@keyframes girar {
+  0%,
+  20% {
+    transform: rotate(0deg);
   }
-  .cruceta div {
-    gap: 52px;
+  60%,
+  100% {
+    transform: rotate(-90deg);
   }
-  .cruceta .btn {
-    width: 52px;
-    height: 52px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .movil {
+    animation: none;
+    transform: rotate(-90deg);
   }
 }
 </style>

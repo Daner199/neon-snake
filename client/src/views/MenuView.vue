@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { enterGameScreen } from '../screen'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
@@ -13,7 +14,7 @@ const auth = useAuthStore()
     </header>
     <h1 class="titulo">NEON SNAKE</h1>
     <p class="lema">Come, crece y haz chocar a los demás jugadores contra tu cola.</p>
-    <RouterLink class="btn btn--primario btn--grande" to="/jugar/arena">Jugar ahora</RouterLink>
+    <RouterLink class="btn btn--primario btn--grande" to="/jugar/arena" @click="enterGameScreen">Jugar ahora</RouterLink>
     <nav class="opciones">
       <RouterLink class="btn" to="/modos">Elegir modo</RouterLink>
       <RouterLink class="btn" to="/ranking">Ranking</RouterLink>

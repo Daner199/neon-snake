@@ -7,10 +7,14 @@ import {
   COLORS,
   COLS,
   FOOD_COUNT,
+  MAX_ZOOM,
+  MIN_CELL_PX,
+  MINIMAP,
   MIN_STEP_MS,
   POINTS,
   ROWS,
   START_STEP_MS,
+  TARGET_CELL_PX,
   type GameMode,
 } from '../constants'
 import { EventBus } from '../EventBus'
@@ -72,6 +76,9 @@ export class ArenaScene extends Phaser.Scene {
   private headGlows!: SpritePool
   private bodies!: SpritePool
   private frozenDrawn = false
+  // Punto que sigue la cámara (la cabeza del jugador) y minimapa, solo en pantallas pequeñas
+  private follow!: Phaser.GameObjects.Zone
+  private minimap: Phaser.Cameras.Scene2D.Camera | null = null
   // Puntos del cuerpo y muestras de círculos, reutilizados en cada fotograma
   private path: number[] = []
   private samples: number[] = []
@@ -116,6 +123,11 @@ export class ArenaScene extends Phaser.Scene {
       for (let i = 0; i < BOT_COUNT; i++) this.spawnBot(false)
     }
     this.fillFood()
+    this.follow = this.add.zone(this.player.head.x * CELL + CELL / 2, this.player.head.y * CELL + CELL / 2, 1, 1)
+    this.minimap = null
+    this.updateCamera()
+    this.scale.on('resize', this.updateCamera, this)
+    this.events.once('shutdown', () => this.scale.off('resize', this.updateCamera, this))
     this.setupInput()
     this.setupEvents()
     this.renderFood()
@@ -490,7 +502,40 @@ export class ArenaScene extends Phaser.Scene {
         .setTint(COLORS.background)
     }
 
+    if (s.isPlayer) this.follow.setPosition(hx, hy)
     if (this.mode === 'arena') this.labelFor(s).setPosition(hx, hy - CELL * 0.7)
+  }
+
+  // Si las celdas se ven muy pequeñas (celular en horizontal), la cámara se acerca y sigue al jugador
+  private updateCamera() {
+    const cam = this.cameras.main
+    const width = COLS * CELL
+    const height = ROWS * CELL
+    const cellPx = CELL * (this.scale.displaySize.width / this.scale.gameSize.width)
+    if (cellPx > 0 && cellPx < MIN_CELL_PX) {
+      cam.setZoom(Math.min(MAX_ZOOM, TARGET_CELL_PX / cellPx))
+      cam.setBounds(0, 0, width, height)
+      cam.startFollow(this.follow, false, 0.1, 0.1)
+      if (!this.minimap) {
+        const { width: w, height: h, margin } = MINIMAP
+        this.minimap = this.cameras
+          .add(width - w - margin, height - h - margin, w, h)
+          .setZoom(w / width)
+          .setBackgroundColor(COLORS.surface)
+          .setAlpha(0.9)
+        this.minimap.centerOn(width / 2, height / 2)
+        this.minimap.ignore([...this.labels.values()])
+      }
+    } else {
+      cam.stopFollow()
+      cam.removeBounds()
+      cam.setZoom(1)
+      cam.centerOn(width / 2, height / 2)
+      if (this.minimap) {
+        this.cameras.remove(this.minimap)
+        this.minimap = null
+      }
+    }
   }
 
   // La etiqueta de nombre se crea una vez por serpiente; después solo se mueve
@@ -502,6 +547,7 @@ export class ArenaScene extends Phaser.Scene {
         .text(0, 0, text, { fontFamily: 'Inter, sans-serif', fontSize: '12px', fontStyle: '600', color: hex(s.color) })
         .setOrigin(0.5, 1)
         .setDepth(10)
+      this.minimap?.ignore(label)
       this.labels.set(s.id, label)
     }
     return label

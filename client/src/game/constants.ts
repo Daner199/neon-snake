@@ -10,6 +10,12 @@ export const BOT_COUNT = 7
 export const BOT_RESPAWN_MS = 2500
 export const BOT_FLOOD_LIMIT = 150 // celdas que mira un bot para no meterse en callejones
 
+// Cámara en pantallas pequeñas: si cada celda se ve de menos de MIN_CELL_PX, se acerca y sigue al jugador
+export const MIN_CELL_PX = 10
+export const TARGET_CELL_PX = 15
+export const MAX_ZOOM = 2
+export const MINIMAP = { width: 256, height: 160, margin: 16 } as const
+
 export const POINTS = {
   food: 10,
   goldenFood: 50,
@@ -19,6 +25,7 @@ export const POINTS = {
 // Los mismos colores que las variables de style.css, en el formato numérico de Phaser
 export const COLORS = {
   background: 0x0b0f1a,
+  surface: 0x121a2b,
   eye: 0xe6edf7,
   player: 0x39ff14,
   food: 0xff2e88,

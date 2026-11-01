@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { enterGameScreen } from '../screen'
+</script>
+
 <template>
   <main class="pagina">
     <header class="cabecera">
@@ -5,11 +9,11 @@
       <h1 class="titulo">ELIGE UN MODO</h1>
     </header>
     <div class="modos">
-      <RouterLink class="modo" to="/jugar/arena">
+      <RouterLink class="modo" to="/jugar/arena" @click="enterGameScreen">
         <h2>Arena</h2>
         <p>Muchos jugadores en un mapa grande. Haz que choquen contra tu cuerpo para eliminarlos y quedarte con su comida.</p>
       </RouterLink>
-      <RouterLink class="modo" to="/jugar/classic">
+      <RouterLink class="modo" to="/jugar/classic" @click="enterGameScreen">
         <h2>Clásico</h2>
         <p>Tú solo en un tablero cerrado. Cada 5 frutas vas más rápido.</p>
       </RouterLink>
