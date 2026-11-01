@@ -8,6 +8,7 @@ export const MIN_STEP_MS = 60
 export const FOOD_COUNT = { arena: 45, classic: 1 } as const
 export const BOT_COUNT = 7
 export const BOT_RESPAWN_MS = 2500
+export const BOT_FLOOD_LIMIT = 150 // celdas que mira un bot para no meterse en callejones
 
 export const POINTS = {
   food: 10,
@@ -18,6 +19,7 @@ export const POINTS = {
 // Los mismos colores que las variables de style.css, en el formato numérico de Phaser
 export const COLORS = {
   background: 0x0b0f1a,
+  eye: 0xe6edf7,
   player: 0x39ff14,
   food: 0xff2e88,
   golden: 0xffc83d,

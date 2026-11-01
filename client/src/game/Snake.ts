@@ -27,6 +27,8 @@ export class Snake {
   kills = 0
   foodsEaten = 0
   alive = true
+  // Cola antes del último paso: sirve para dibujar el movimiento suave entre ticks (null = aún no se movió)
+  prevTail: Cell | null = null
 
   tag: PlayerTag
   color: number
