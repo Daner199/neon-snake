@@ -63,7 +63,26 @@ export const sounds = {
     ]),
 }
 
-// Prepara el audio en el primer toque o tecla (requisito de los navegadores)
-export function unlockAudio() {
-  context()
+// Los navegadores del celular bloquean el audio hasta que el jugador toca la pantalla.
+// Dentro de ese toque se reanuda el AudioContext y se reproduce un sonido vacío (lo exige iPhone).
+function unlockAudio() {
+  const ac = context()
+  if (!ac) return
+  ac.resume().catch(() => undefined)
+  const silence = ac.createBufferSource()
+  silence.buffer = ac.createBuffer(1, 1, 22050)
+  silence.connect(ac.destination)
+  silence.start(0)
+  if (ac.state === 'running') removeUnlock()
+}
+
+const UNLOCK_EVENTS = ['pointerdown', 'touchstart', 'keydown'] as const
+
+function removeUnlock() {
+  for (const e of UNLOCK_EVENTS) document.removeEventListener(e, unlockAudio, true)
+}
+
+// Se llama una vez al arrancar la app: el primer toque en cualquier pantalla (menú, Jugar, cruceta) desbloquea el audio
+export function installAudioUnlock() {
+  for (const e of UNLOCK_EVENTS) document.addEventListener(e, unlockAudio, { capture: true, passive: true })
 }

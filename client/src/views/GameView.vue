@@ -6,7 +6,7 @@ import GameCanvas from '../components/GameCanvas.vue'
 import { EventBus } from '../game/EventBus'
 import type { GameOverStats, LeaderboardRow } from '../game/scenes/ArenaScene'
 import { enterGameScreen, leaveGameScreen } from '../screen'
-import { sounds, unlockAudio } from '../sound'
+import { sounds } from '../sound'
 import { useAuthStore } from '../stores/auth'
 import { useGameStore } from '../stores/game'
 import { useSettingsStore } from '../stores/settings'
@@ -163,8 +163,6 @@ onMounted(() => {
   EventBus.on('bot-killed', onBotKilled)
   EventBus.on('player-died', onPlayerDied)
   window.addEventListener('keydown', onKey)
-  window.addEventListener('keydown', unlockAudio, { once: true })
-  window.addEventListener('pointerdown', unlockAudio, { once: true })
   compactQuery.addEventListener('change', updateCompact)
   touchQuery.addEventListener('change', updateOrientation)
   portraitQuery.addEventListener('change', updateOrientation)
@@ -181,8 +179,6 @@ onBeforeUnmount(() => {
   EventBus.off('bot-killed', onBotKilled)
   EventBus.off('player-died', onPlayerDied)
   window.removeEventListener('keydown', onKey)
-  window.removeEventListener('keydown', unlockAudio)
-  window.removeEventListener('pointerdown', unlockAudio)
   compactQuery.removeEventListener('change', updateCompact)
   touchQuery.removeEventListener('change', updateOrientation)
   portraitQuery.removeEventListener('change', updateOrientation)
