@@ -1,17 +1,60 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { api, ApiError } from '../api'
 import GameCanvas from '../components/GameCanvas.vue'
 import { EventBus } from '../game/EventBus'
 import type { GameOverStats, LeaderboardRow } from '../game/scenes/ArenaScene'
+import { useAuthStore } from '../stores/auth'
 import { useGameStore } from '../stores/game'
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
 
 const route = useRoute()
 const mode = route.params.modo === 'classic' ? 'classic' : 'arena'
 const store = useGameStore()
+const auth = useAuthStore()
 const paused = ref(false)
+const saveStatus = ref<SaveStatus>('idle')
+const saveMessage = ref('')
 
 store.start(mode)
+
+// Guarda la partida en el servidor si hay sesión; los invitados no entran al ranking
+async function saveGame(stats: GameOverStats) {
+  if (!auth.loggedIn) {
+    saveStatus.value = 'guest'
+    return
+  }
+  saveStatus.value = 'saving'
+  saveMessage.value = 'Guardando partida…'
+  try {
+    const result = await api<{ position: number | null }>('/sessions', {
+      method: 'POST',
+      token: auth.token,
+      body: {
+        mode: stats.mode,
+        score: stats.score,
+        length: stats.length,
+        botsKilled: stats.botsKilled,
+        foodsEaten: stats.foodsEaten,
+        durationMs: stats.durationMs,
+      },
+    })
+    saveStatus.value = 'saved'
+    saveMessage.value = result.position
+      ? `Partida guardada · Puesto ${result.position}.º en el ranking`
+      : 'Partida guardada'
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) {
+      auth.logout()
+      saveStatus.value = 'guest'
+      return
+    }
+    saveStatus.value = 'error'
+    saveMessage.value = e instanceof Error ? e.message : 'No se pudo guardar la partida'
+  }
+}
 
 function togglePause() {
   if (store.gameOver) return
@@ -22,6 +65,7 @@ function togglePause() {
 function playAgain() {
   store.start(mode)
   paused.value = false
+  saveStatus.value = 'idle'
   EventBus.emit('restart')
 }
 
@@ -41,7 +85,10 @@ const onScore = (hud: { score: number; length: number; botsKilled: number }) => 
 }
 const onLeaderboard = (rows: LeaderboardRow[]) => (store.leaderboard = rows)
 const onFeed = (f: { text: string; mine: boolean }) => store.pushFeed(f.text, f.mine)
-const onGameOver = (stats: GameOverStats) => store.finish(stats)
+const onGameOver = (stats: GameOverStats) => {
+  store.finish(stats)
+  saveGame(stats)
+}
 const onKey = (e: KeyboardEvent) => {
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause()
   if (e.key === 'Enter' && store.gameOver) playAgain()
@@ -118,6 +165,12 @@ onBeforeUnmount(() => {
           <p class="puntos">{{ store.gameOver.score }}</p>
           <p v-if="store.newRecord" class="record">¡Nuevo récord!</p>
           <p v-else class="suave">Tu récord: {{ store.bestScore }}</p>
+          <p v-if="saveStatus === 'guest'" class="aviso">
+            <RouterLink to="/login">Inicia sesión</RouterLink> para entrar al ranking
+          </p>
+          <p v-else-if="saveStatus !== 'idle'" class="aviso" :class="{ 'aviso--error': saveStatus === 'error' }" role="status">
+            {{ saveMessage }}
+          </p>
           <div class="stats">
             <div><strong>{{ store.gameOver.length }}</strong><span>Longitud</span></div>
             <div v-if="mode === 'arena'"><strong class="rosa">{{ store.gameOver.botsKilled }}</strong><span>Bots eliminados</span></div>
@@ -332,6 +385,19 @@ onBeforeUnmount(() => {
   margin: 0;
   font-weight: 700;
   color: var(--color-oro);
+}
+.aviso {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-borde);
+  background: var(--color-fondo);
+  font-size: 14px;
+  font-weight: 600;
+}
+.aviso--error {
+  border-color: var(--color-peligro);
+  color: var(--color-peligro);
 }
 .stats {
   display: grid;

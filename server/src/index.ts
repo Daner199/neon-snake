@@ -3,8 +3,12 @@ import cors from 'cors'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { prisma } from './db.js'
 import { authRouter } from './routes/auth.js'
+import { rankingRouter } from './routes/ranking.js'
+import { sessionsRouter } from './routes/sessions.js'
 
 const app = express()
+// Detrás de nginx/Railway: la IP real del jugador viene del proxy (la usa el rate limit)
+app.set('trust proxy', 1)
 app.use(cors())
 app.use(express.json())
 
@@ -25,6 +29,8 @@ app.get('/api/modes', async (_req, res) => {
 })
 
 app.use('/api/auth', authRouter)
+app.use('/api/sessions', sessionsRouter)
+app.use('/api/ranking', rankingRouter)
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' })
