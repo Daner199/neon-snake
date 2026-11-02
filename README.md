@@ -1,5 +1,7 @@
 # Neon Snake
 
+**Jugar:** https://neon-snake-web.onrender.com (la primera visita puede tardar hasta 1 minuto si el servidor estaba dormido)
+
 Juego de Snake para navegador con un modo **Arena con bots**: serpientes controladas por la computadora que puedes eliminar haciéndolas chocar contra tu cuerpo. También tiene modo **Clásico**.
 
 | Parte | Tecnología | Carpeta |
