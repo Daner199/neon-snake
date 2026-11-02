@@ -1,0 +1,33 @@
+# Blueprint de Render: crea la API y el juego (web) en el plan gratis.
+# La base de datos va en Neon (PostgreSQL gratis): su dirección se pega en DATABASE_URL.
+# Guía paso a paso: README, sección "Publicar en Render + Neon".
+services:
+  - type: web
+    name: neon-snake-api
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # se pide al crear el Blueprint: la dirección directa (sin pooler) de Neon
+      - key: JWT_SECRET
+        generateValue: true # Render genera un texto aleatorio
+      - key: CORS_ORIGIN
+        value: ""
+      # Proxies delante de la API: borde de Render de la web, nginx y borde de Render de la API
+      - key: TRUST_PROXY
+        value: "3"
+
+  - type: web
+    name: neon-snake-web
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./client/Dockerfile
+    dockerContext: ./client
+    envVars:
+      - key: API_URL
+        sync: false # se pide al crear el Blueprint: la dirección pública de la API, p. ej. https://neon-snake-api.onrender.com

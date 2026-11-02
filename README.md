@@ -77,6 +77,7 @@ neon-snake/
 │   └── Dockerfile             Migra la base de datos y levanta la API
 ├── docs/mockups/              Diseño de las pantallas
 ├── .env.example               Todas las variables de entorno
+├── render.yaml                Publicar en Render (API y juego)
 └── docker-compose.yml         Base de datos, API y web
 ```
 
@@ -132,6 +133,28 @@ El juego se publica como **tres servicios** en un mismo proyecto de Railway: la 
 7. Opcional: en `client/index.html` cambia `og:image` por la URL completa (`https://TU-DOMINIO/og-image.png`) para que la vista previa salga en WhatsApp y redes.
 
 Si los jugadores comparten el límite de intentos de login (todos reciben "Demasiados intentos"), revisa `TRUST_PROXY`: debe ser el número de proxies delante de la API.
+
+## Publicar en Render + Neon (gratis)
+
+La base de datos va en **Neon** y la API y el juego en **Render**, con el archivo `render.yaml` de la raíz. En el plan gratis de Render los servicios se duermen tras unos 15 minutos sin visitas: la primera visita después tarda entre 30 y 60 segundos.
+
+**1. Base de datos en Neon**
+
+1. Entra en [neon.tech](https://neon.tech) y crea un proyecto (región **AWS US East 2 (Ohio)**, la misma que Render en `render.yaml`).
+2. En **Connect**, desactiva **Connection pooling** y copia la dirección. Empieza por `postgresql://` y termina en `?sslmode=require`. Hace falta la directa (sin `-pooler`) para que las migraciones funcionen.
+
+**2. API y juego en Render**
+
+1. Entra en [render.com](https://render.com) con tu cuenta de GitHub.
+2. **New → Blueprint** y elige el repositorio `neon-snake`. Render lee `render.yaml` y muestra dos servicios: `neon-snake-api` y `neon-snake-web`.
+3. Te pide dos valores:
+   - `DATABASE_URL`: la dirección de Neon del paso anterior.
+   - `API_URL`: la dirección pública que tendrá la API, `https://neon-snake-api.onrender.com`. Si Render le añade letras al nombre porque ya existe, cámbiala después en **neon-snake-web → Environment** por la que aparezca en el servicio de la API.
+4. **Apply**. La primera vez tarda unos minutos en compilar. La API aplica las migraciones y crea los modos de juego sola.
+5. Abre `https://neon-snake-api.onrender.com/api/health`: debe responder `{"ok":true,"db":"conectada"}`.
+6. Abre la dirección de `neon-snake-web` (algo como `https://neon-snake-web.onrender.com`): es el juego.
+
+`JWT_SECRET` lo genera Render solo. Si los jugadores comparten el límite de intentos de login (todos reciben "Demasiados intentos"), revisa `TRUST_PROXY` en la API.
 
 ## Plan de la semana
 
