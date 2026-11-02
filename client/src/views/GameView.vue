@@ -106,12 +106,15 @@ function togglePause() {
   EventBus.emit(paused.value ? 'pause' : 'resume')
 }
 
+// "Jugar otra vez" crea el juego de cero (como al entrar desde el menú), cambiando la key de GameCanvas.
+// Reiniciar la escena de Phaser podía dejar la partida parada en el celular al cambiar a pantalla completa.
+const round = ref(0)
 function playAgain() {
   enterGameScreen()
   store.start(mode)
   paused.value = false
   saveStatus.value = 'idle'
-  EventBus.emit('restart')
+  round.value++
 }
 
 function turn(d: 'up' | 'down' | 'left' | 'right') {
@@ -218,7 +221,7 @@ onBeforeUnmount(() => {
     </header>
 
     <div class="escenario">
-      <GameCanvas :mode="mode" />
+      <GameCanvas :key="round" :mode="mode" />
 
       <TransitionGroup tag="ul" name="feed" class="feed" :class="{ abajo: compact }" aria-live="polite">
         <li v-for="f in feedItems" :key="f.id" :class="{ mio: f.mine }">{{ f.text }}</li>

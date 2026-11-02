@@ -1,6 +1,6 @@
 // Canal de mensajes entre Phaser y Vue.
 // Phaser emite: 'scene-ready', 'render-lost', 'score-changed', 'food-eaten', 'bot-killed', 'player-died', 'game-over', 'leaderboard', 'feed'
-// Vue emite:    'pause', 'resume', 'restart', 'turn'
+// Vue emite:    'pause', 'resume', 'turn'
 // No depende de Phaser: así las pantallas de Vue cargan sin esperar al motor (~1 MB).
 type Handler = (...args: never[]) => void
 

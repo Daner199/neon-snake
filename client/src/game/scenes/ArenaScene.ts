@@ -610,16 +610,13 @@ export class ArenaScene extends Phaser.Scene {
   private setupEvents() {
     const onPause = () => (this.paused = true)
     const onResume = () => (this.paused = false)
-    const onRestart = () => this.scene.restart()
     const onTurn = (d: keyof typeof DIRS) => this.player.turn(DIRS[d])
     EventBus.on('pause', onPause)
     EventBus.on('resume', onResume)
-    EventBus.on('restart', onRestart)
     EventBus.on('turn', onTurn)
     this.events.once('shutdown', () => {
       EventBus.off('pause', onPause)
       EventBus.off('resume', onResume)
-      EventBus.off('restart', onRestart)
       EventBus.off('turn', onTurn)
     })
   }
