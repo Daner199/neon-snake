@@ -175,7 +175,9 @@ export class GameScene extends Phaser.Scene {
         continue
       }
       const owner = bodies[cellIndex(h)]
-      if (owner !== 0) {
+      // Con "atraviesaCuerpo" (modos.json) cada serpiente pasa por encima de su propio cuerpo
+      const ownBody = owner === s.id && this.modo.atraviesaCuerpo
+      if (owner !== 0 && !ownBody) {
         const other = all.find((o) => o.id === owner) ?? null
         deaths.set(s, other && other !== s ? { killer: other, causa: 'jugador' } : { killer: null, causa: 'cuerpo' })
         continue

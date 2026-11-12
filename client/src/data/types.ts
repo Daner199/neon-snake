@@ -22,6 +22,7 @@ export interface Modo {
   pasoInicialMs: number // tiempo entre movimientos al empezar (más bajo = más rápido)
   pasoMinimoMs: number // velocidad máxima
   aceleraCadaFrutas: number // cada cuántas frutas va más rápido (0 = nunca)
+  atraviesaCuerpo: boolean // true = chocar con tu propio cuerpo no elimina (solo los bordes y las otras serpientes)
 }
 
 // Piezas para inventar los nombres de los jugadores con IA (nombres.json)

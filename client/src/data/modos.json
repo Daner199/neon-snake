@@ -7,7 +7,8 @@
     "jugadores": 7,
     "pasoInicialMs": 110,
     "pasoMinimoMs": 60,
-    "aceleraCadaFrutas": 0
+    "aceleraCadaFrutas": 0,
+    "atraviesaCuerpo": true
   },
   {
     "id": "classic",
@@ -17,6 +18,7 @@
     "jugadores": 0,
     "pasoInicialMs": 110,
     "pasoMinimoMs": 60,
-    "aceleraCadaFrutas": 5
+    "aceleraCadaFrutas": 5,
+    "atraviesaCuerpo": true
   }
 ]

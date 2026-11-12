@@ -42,6 +42,7 @@ describe('modos.json', () => {
         expect(Number.isInteger(m[k]), `${m.id}.${k}`).toBe(true)
         expect(m[k] as number, `${m.id}.${k}`).toBeGreaterThanOrEqual(0)
       }
+      expect(typeof m.atraviesaCuerpo, `${m.id}.atraviesaCuerpo`).toBe('boolean')
       expect(m.id).toMatch(ID)
     }
   })
