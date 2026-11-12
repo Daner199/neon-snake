@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import SkinPreview from '../components/SkinPreview.vue'
 import { enterGameScreen } from '../screen'
 import { useAuthStore } from '../stores/auth'
+import { useSkinsStore } from '../stores/skins'
 
 const auth = useAuthStore()
+const skins = useSkinsStore()
 </script>
 
 <template>
@@ -17,6 +20,10 @@ const auth = useAuthStore()
     <RouterLink class="btn btn--primario btn--grande" to="/jugar/arena" @click="enterGameScreen">Jugar ahora</RouterLink>
     <nav class="opciones">
       <RouterLink class="btn" to="/modos">Elegir modo</RouterLink>
+      <RouterLink class="btn btn--skins" to="/skins">
+        Skins
+        <SkinPreview :skin="skins.skinActual" :segmentos="4" :tamano="11" />
+      </RouterLink>
       <RouterLink class="btn" to="/ranking">Ranking</RouterLink>
     </nav>
   </main>
@@ -68,6 +75,9 @@ const auth = useAuthStore()
   width: min(340px, 100%);
   min-height: 64px;
   font-size: 20px;
+}
+.btn--skins {
+  gap: 12px;
 }
 .opciones {
   display: flex;

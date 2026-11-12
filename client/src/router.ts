@@ -20,6 +20,7 @@ export default createRouter({
           hash: to.hash,
         },
     },
+    { path: '/skins', name: 'skins', component: () => import('./views/SkinsView.vue') },
     { path: '/ranking', name: 'ranking', component: () => import('./views/RankingView.vue') },
     { path: '/login', name: 'login', component: () => import('./views/LoginView.vue') },
     { path: '/:pathMatch(.*)*', name: 'no-encontrada', component: () => import('./views/NotFoundView.vue') },
