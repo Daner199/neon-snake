@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, ApiError } from '../api'
 import { buscarModo, buscarSkin, MODOS } from '../data'
@@ -149,8 +149,18 @@ const onGameOver = (stats: GameOverStats) => {
   store.finish(stats)
   saveGame(stats)
 }
-// Si la escena arranca con la partida ya pausada (celular en vertical), se lo recuerda
+// La skin elegida llega a Phaser solo por evento: al estar lista la escena y cada vez que se elige otra
+function sendSkin() {
+  const { id, colorCabeza, colorCuerpo, colorFranja, colorBrillo } = skins.skinActual
+  EventBus.emit(EVENTS.SKIN_CHANGED, { id, colorCabeza, colorCuerpo, colorFranja, colorBrillo })
+}
+watch(() => skins.elegida, sendSkin)
+// Skins para cambiar desde la pausa: solo las desbloqueadas
+const skinsDisponibles = computed(() => skins.catalogo.filter((s) => s.estado !== 'bloqueada'))
+
+// Al terminar create() la escena pide la skin; si arranca con la partida ya pausada (celular en vertical), se lo recuerda
 const onSceneReady = () => {
+  sendSkin()
   if (paused.value) EventBus.emit(EVENTS.PAUSE)
 }
 const onKey = (e: KeyboardEvent) => {
@@ -288,6 +298,23 @@ onBeforeUnmount(() => {
           <button class="btn" type="button" :aria-pressed="settings.muted" @click="settings.toggleMute()">
             {{ settings.muted ? '🔇 Sonido apagado' : '🔊 Sonido encendido' }}
           </button>
+          <div class="fila-skin" role="group" aria-label="Skin">
+            <span>Skin</span>
+            <div class="circulos">
+              <button
+                v-for="s in skinsDisponibles"
+                :key="s.id"
+                class="circulo"
+                :class="{ activo: s.estado === 'activa' }"
+                type="button"
+                :style="{ '--skin-cuerpo': s.colorCuerpo, '--skin-brillo': s.colorBrillo }"
+                :title="s.nombre"
+                :aria-label="s.nombre"
+                :aria-pressed="s.estado === 'activa'"
+                @click="skins.elegir(s.id)"
+              ></button>
+            </div>
+          </div>
           <RouterLink class="btn" to="/">Salir al menú</RouterLink>
         </div>
       </div>
@@ -654,6 +681,46 @@ onBeforeUnmount(() => {
   background: var(--color-fondo);
   font-size: 14px;
   font-weight: 600;
+}
+.fila-skin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-borde);
+  font-weight: 600;
+}
+.circulos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.circulo {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.circulo::before {
+  content: '';
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: auto;
+  border-radius: 50%;
+  background: var(--skin-cuerpo);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--skin-brillo) 60%, transparent);
+}
+.circulo.activo::before {
+  outline: 2px solid var(--color-texto);
+  outline-offset: 3px;
 }
 .skins-nuevas {
   display: flex;

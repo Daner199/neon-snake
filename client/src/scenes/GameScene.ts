@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { cellIndex, inside, nextIsSafe, think, type Grid } from '../game/bots/BotBrain'
-import { buscarModo, MODOS, type Modo } from '../data'
+import { buscarModo, MODOS, SKINS, type Modo } from '../data'
+import { closestColor, colorsFromBase, colorsFromSkin, hex, mix } from '../game/colors'
 import {
   BOT_RESPAWN_MS,
   CELL,
@@ -23,21 +24,18 @@ import { randomTag } from '../game/names'
 import { SpritePool } from '../game/SpritePool'
 import { DIRS, Snake, type Cell } from '../game/Snake'
 import { EventBus } from '../events/EventBus'
-import { EVENTS, type CausaMuerte, type Direction, type GameOverStats, type LeaderboardRow } from '../events/names'
+import {
+  EVENTS,
+  type CausaMuerte,
+  type Direction,
+  type GameOverStats,
+  type LeaderboardRow,
+  type SkinChangedPayload,
+} from '../events/names'
 import type { GameOverData } from './GameOverScene'
 
 type Food = Cell & { golden: boolean }
 type Death = { killer: Snake | null; causa: CausaMuerte } // killer: la otra serpiente, si la hubo
-
-const hex = (n: number) => '#' + n.toString(16).padStart(6, '0')
-
-// Mezcla un color con otro (t = 0: el primero, t = 1: el segundo)
-function mix(a: number, b: number, t: number): number {
-  const r = ((a >> 16) & 255) + ((((b >> 16) & 255) - ((a >> 16) & 255)) * t)
-  const g = ((a >> 8) & 255) + ((((b >> 8) & 255) - ((a >> 8) & 255)) * t)
-  const bl = (a & 255) + (((b & 255) - (a & 255)) * t)
-  return (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(bl)
-}
 
 const WHITE = 0xffffff
 const SAMPLE_GAP = CELL * 0.3 // distancia entre los círculos que forman el cuerpo
@@ -73,6 +71,8 @@ export class GameScene extends Phaser.Scene {
   private over = false
   private startedAt = 0
   private colorIndex = 0
+  // Colores de los bots: los de COLORS.bots menos el que más se parece a la skin del jugador
+  private botPalette: number[] = [...COLORS.bots]
   private tick = 0
 
   constructor() {
@@ -100,7 +100,10 @@ export class GameScene extends Phaser.Scene {
     this.bodies = new SpritePool(this, TEXTURES.disc, 4)
     this.burst = makeBurst(this)
 
-    this.player = new Snake({ name: 'Tú', country: '', level: 1 }, COLORS.player, { x: 30, y: 20 }, DIRS.right, 4, true)
+    // Hasta que Vue mande la skin elegida (evento skin-changed), el jugador usa la primera del JSON
+    this.botPalette = [...COLORS.bots]
+    const skin = colorsFromSkin(SKINS[0])
+    this.player = new Snake({ name: 'Tú', country: '', level: 1 }, skin, { x: 30, y: 20 }, DIRS.right, 4, true)
 
     for (let i = 0; i < this.modo.jugadores; i++) this.spawnBot(false)
     this.fillFood()
@@ -222,7 +225,7 @@ export class GameScene extends Phaser.Scene {
     const killer = death.killer
     victim.alive = false
     // El jugador explota en GameOverScene (esta escena se pausa y sus partículas se quedarían quietas)
-    if (!victim.isPlayer) explodeBody(this.burst, victim.cells, victim.color)
+    if (!victim.isPlayer) explodeBody(this.burst, victim.cells, victim.color.body)
 
     if (killer) {
       killer.score += POINTS.kill
@@ -278,7 +281,7 @@ export class GameScene extends Phaser.Scene {
       rank: ranking.findIndex((r) => r.isPlayer) + 1,
       players: ranking.length,
     }
-    const data: GameOverData = { stats, body: [...this.player.cells], color: this.player.color }
+    const data: GameOverData = { stats, body: [...this.player.cells], color: this.player.color.body }
     this.scene.launch('GameOverScene', data)
     this.scene.pause()
   }
@@ -288,7 +291,7 @@ export class GameScene extends Phaser.Scene {
   private spawnBot(announce: boolean) {
     const taken = new Set(this.bots.map((b) => b.tag.name))
     const tag = randomTag(taken)
-    const color = COLORS.bots[this.colorIndex++ % COLORS.bots.length]
+    const color = colorsFromBase(this.botPalette[this.colorIndex++ % this.botPalette.length])
     const startScore = Math.floor(Math.random() * 600)
     const length = 4 + Math.floor(startScore / 80)
     const spot = this.findSpawn(length)
@@ -423,7 +426,7 @@ export class GameScene extends Phaser.Scene {
       samples[m++] = 0
     }
     const total = Math.max(walked, CELL)
-    const stripe = mix(s.color, COLORS.background, 0.28)
+    const { head, body, stripe, glow } = s.color
 
     // Se dibuja de la cola a la cabeza para que la cabeza quede encima
     for (let j = m - 3; j >= 0; j -= 3) {
@@ -431,7 +434,7 @@ export class GameScene extends Phaser.Scene {
       const t = d / total
       const radius = HEAD_RADIUS - (HEAD_RADIUS - TAIL_RADIUS) * t
       // Escamas: el tono alterna cada 2 segmentos; más claro cerca de la cabeza
-      let color = Math.floor(d / (CELL * 2)) % 2 === 1 ? stripe : s.color
+      let color = Math.floor(d / (CELL * 2)) % 2 === 1 ? stripe : body
       const light = Math.max(0, 1 - d / (CELL * 2.5)) * 0.4
       if (light > 0) color = mix(color, WHITE, light)
       this.bodies.next().setPosition(samples[j], samples[j + 1]).setScale((radius * 2) / DISC).setTint(color)
@@ -443,12 +446,12 @@ export class GameScene extends Phaser.Scene {
     const dir = s.dir
     const along = (CELL * 1.2) / DISC
     const across = (CELL * 1.05) / DISC
-    this.headGlows.next().setPosition(hx, hy).setScale((CELL * 3.2) / GLOW).setTint(s.color).setAlpha(0.55)
+    this.headGlows.next().setPosition(hx, hy).setScale((CELL * 3.2) / GLOW).setTint(glow).setAlpha(0.55)
     this.bodies
       .next()
       .setPosition(hx, hy)
       .setScale(dir.x !== 0 ? along : across, dir.x !== 0 ? across : along)
-      .setTint(mix(s.color, WHITE, 0.35))
+      .setTint(head)
     const px = -dir.y
     const py = dir.x
     for (const side of [1, -1]) {
@@ -504,7 +507,7 @@ export class GameScene extends Phaser.Scene {
     if (!label) {
       const text = s.isPlayer ? 'Tú' : `${s.tag.name} · Nv.${s.tag.level}`
       label = this.add
-        .text(0, 0, text, { fontFamily: 'Inter, sans-serif', fontSize: '12px', fontStyle: '600', color: hex(s.color) })
+        .text(0, 0, text, { fontFamily: 'Inter, sans-serif', fontSize: '12px', fontStyle: '600', color: hex(s.color.body) })
         .setOrigin(0.5, 1)
         .setDepth(10)
       this.minimap?.ignore(label)
@@ -541,14 +544,33 @@ export class GameScene extends Phaser.Scene {
     const onPause = () => (this.paused = true)
     const onResume = () => (this.paused = false)
     const onTurn = (d: Direction) => this.player.turn(DIRS[d])
+    const onSkin = (skin: SkinChangedPayload) => this.applySkin(skin)
     EventBus.on(EVENTS.PAUSE, onPause)
     EventBus.on(EVENTS.RESUME, onResume)
     EventBus.on(EVENTS.TURN, onTurn)
+    EventBus.on(EVENTS.SKIN_CHANGED, onSkin)
     this.onExit(() => {
       EventBus.off(EVENTS.PAUSE, onPause)
       EventBus.off(EVENTS.RESUME, onResume)
       EventBus.off(EVENTS.TURN, onTurn)
+      EventBus.off(EVENTS.SKIN_CHANGED, onSkin)
     })
+  }
+
+  // Pinta al jugador con su skin al instante (también en pausa, sin reiniciar).
+  // Los bots dejan de usar el color que más se parece al de la skin, para que nadie se confunda.
+  private applySkin(skin: SkinChangedPayload) {
+    this.player.color = colorsFromSkin(skin)
+    const avoid = closestColor(COLORS.bots, this.player.color.body)
+    this.botPalette = COLORS.bots.filter((c) => c !== avoid)
+    for (const bot of this.bots) {
+      if (bot.color.body !== avoid) continue
+      bot.color = colorsFromBase(this.botPalette[this.colorIndex++ % this.botPalette.length])
+      this.labels.get(bot.id)?.setColor(hex(bot.color.body))
+    }
+    this.labels.get(this.player.id)?.setColor(hex(this.player.color.body))
+    this.frozenDrawn = false // si está en pausa, se vuelve a dibujar una vez con los colores nuevos
+    this.emitLeaderboard() // el punto de color del jugador en el ranking en vivo
   }
 
   // Si el navegador pierde el contexto WebGL (poca memoria, app en segundo plano), Vue avisa y ofrece reintentar
@@ -592,7 +614,7 @@ export class GameScene extends Phaser.Scene {
         country: s.tag.country,
         level: s.tag.level,
         score: s.score,
-        color: hex(s.color),
+        color: hex(s.color.body),
         isPlayer: s.isPlayer,
       }))
       .sort((a, b) => b.score - a.score)

@@ -26,10 +26,10 @@ export const COLORS = {
   background: 0x0b0f1a,
   surface: 0x121a2b,
   eye: 0xe6edf7,
-  player: 0x39ff14,
   food: 0xff2e88,
   golden: 0xffc83d,
   grid: 0x39ff14,
+  // El jugador usa los colores de su skin (src/data/skins.json); los bots, uno de estos
   bots: [0x3db8ff, 0xb36bff, 0xff9f43, 0x00e5d4, 0xffe15a, 0xff6b6b, 0x7c9cff, 0xf78fff],
 } as const
 

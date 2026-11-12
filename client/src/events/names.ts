@@ -1,6 +1,8 @@
 // Nombres de todos los eventos entre Vue y Phaser, y los datos que lleva cada uno.
 // Es el único lugar donde se escribe el texto de un evento: el resto del código usa EVENTS.X.
 
+import type { Skin } from '../data/types'
+
 export const EVENTS = {
   // Phaser (GameScene) -> Vue (GameCanvas, GameView). Sin datos. La escena terminó create()
   SCENE_READY: 'scene-ready',
@@ -26,6 +28,8 @@ export const EVENTS = {
   RESUME: 'resume',
   // Vue (GameView: cruceta táctil) -> Phaser (GameScene). Direction. Girar la serpiente del jugador
   TURN: 'turn',
+  // Vue (GameView, al recibir scene-ready o al elegir otra skin) -> Phaser (GameScene). SkinChangedPayload. Colores del jugador
+  SKIN_CHANGED: 'skin-changed',
 } as const
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS]
@@ -51,6 +55,9 @@ export type SnakeDiedPayload = { puntos: number; tamano: number } & (
   | { causa: 'pared' | 'cuerpo' }
   | { causa: 'jugador'; eliminadoPor: string }
 )
+
+// La skin elegida, con los colores que Phaser necesita para pintar al jugador
+export type SkinChangedPayload = Pick<Skin, 'id' | 'colorCabeza' | 'colorCuerpo' | 'colorFranja' | 'colorBrillo'>
 
 export interface FeedPayload {
   text: string
@@ -93,4 +100,5 @@ export interface EventPayloads {
   [EVENTS.PAUSE]: void
   [EVENTS.RESUME]: void
   [EVENTS.TURN]: Direction
+  [EVENTS.SKIN_CHANGED]: SkinChangedPayload
 }

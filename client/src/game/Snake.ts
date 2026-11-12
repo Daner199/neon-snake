@@ -1,3 +1,4 @@
+import type { SnakeColors } from './colors'
 import type { PlayerTag } from './names'
 
 export type Cell = { x: number; y: number }
@@ -31,13 +32,13 @@ export class Snake {
   prevTail: Cell | null = null
 
   tag: PlayerTag
-  color: number
+  color: SnakeColors
   isPlayer: boolean
   personality: BotPersonality | null
 
   constructor(
     tag: PlayerTag,
-    color: number,
+    color: SnakeColors,
     start: Cell,
     dir: Cell,
     length: number,
