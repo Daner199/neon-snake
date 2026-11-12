@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { cellIndex, inside, nextIsSafe, think, type Grid } from '../bots/BotBrain'
+import { cellIndex, inside, nextIsSafe, think, type Grid } from '../game/bots/BotBrain'
 import {
   BOT_COUNT,
   BOT_RESPAWN_MS,
@@ -16,35 +16,14 @@ import {
   START_STEP_MS,
   TARGET_CELL_PX,
   type GameMode,
-} from '../constants'
-import { EventBus } from '../EventBus'
-import { randomTag } from '../names'
-import { SpritePool } from '../SpritePool'
-import { DIRS, Snake, type Cell } from '../Snake'
+} from '../game/constants'
+import { randomTag } from '../game/names'
+import { SpritePool } from '../game/SpritePool'
+import { DIRS, Snake, type Cell } from '../game/Snake'
+import { EventBus } from '../events/EventBus'
+import { EVENTS, type Direction, type GameOverStats, type LeaderboardRow } from '../events/names'
 
 type Food = Cell & { golden: boolean }
-
-export interface LeaderboardRow {
-  id: number
-  name: string
-  country: string
-  level: number
-  score: number
-  color: string
-  isPlayer: boolean
-}
-
-export interface GameOverStats {
-  mode: GameMode
-  score: number
-  length: number
-  botsKilled: number
-  foodsEaten: number
-  durationMs: number
-  killedBy: string | null
-  rank: number
-  players: number
-}
 
 const hex = (n: number) => '#' + n.toString(16).padStart(6, '0')
 
@@ -135,7 +114,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderSnakes(1)
     this.emitHud()
     this.emitLeaderboard()
-    EventBus.emit('scene-ready')
+    EventBus.emit(EVENTS.SCENE_READY)
   }
 
   update(_time: number, delta: number) {
@@ -229,7 +208,7 @@ export class ArenaScene extends Phaser.Scene {
     s.grow += food.golden ? 3 : 1
     s.score += food.golden ? POINTS.goldenFood : POINTS.food
     s.foodsEaten++
-    if (s.isPlayer) EventBus.emit('food-eaten', food.golden)
+    if (s.isPlayer) EventBus.emit(EVENTS.FOOD_EATEN, food.golden)
     if (s.isPlayer && this.mode === 'classic' && s.foodsEaten % 5 === 0) {
       this.stepMs = Math.max(MIN_STEP_MS, this.stepMs - 8)
     }
@@ -259,7 +238,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (killer?.isPlayer) {
       this.feed(`Eliminaste a ${victim.tag.name}  +${POINTS.kill}`, true)
-      EventBus.emit('bot-killed', victim.tag.name)
+      EventBus.emit(EVENTS.BOT_KILLED, victim.tag.name)
     } else if (killer) {
       this.feed(`${killer.tag.name} eliminó a ${victim.tag.name}`)
     } else {
@@ -276,7 +255,7 @@ export class ArenaScene extends Phaser.Scene {
   private gameOver(killer: Snake | null) {
     this.over = true
     this.cameras.main.shake(250, 0.01)
-    EventBus.emit('player-died')
+    EventBus.emit(EVENTS.PLAYER_DIED)
     const ranking = this.rankingRows()
     const stats: GameOverStats = {
       mode: this.mode,
@@ -289,7 +268,7 @@ export class ArenaScene extends Phaser.Scene {
       rank: ranking.findIndex((r) => r.isPlayer) + 1,
       players: ranking.length,
     }
-    this.time.delayedCall(600, () => EventBus.emit('game-over', stats))
+    this.time.delayedCall(600, () => EventBus.emit(EVENTS.GAME_OVER, stats))
   }
 
   // ---------- Bots y comida ----------
@@ -610,31 +589,31 @@ export class ArenaScene extends Phaser.Scene {
   private setupEvents() {
     const onPause = () => (this.paused = true)
     const onResume = () => (this.paused = false)
-    const onTurn = (d: keyof typeof DIRS) => this.player.turn(DIRS[d])
-    EventBus.on('pause', onPause)
-    EventBus.on('resume', onResume)
-    EventBus.on('turn', onTurn)
+    const onTurn = (d: Direction) => this.player.turn(DIRS[d])
+    EventBus.on(EVENTS.PAUSE, onPause)
+    EventBus.on(EVENTS.RESUME, onResume)
+    EventBus.on(EVENTS.TURN, onTurn)
     this.events.once('shutdown', () => {
-      EventBus.off('pause', onPause)
-      EventBus.off('resume', onResume)
-      EventBus.off('turn', onTurn)
+      EventBus.off(EVENTS.PAUSE, onPause)
+      EventBus.off(EVENTS.RESUME, onResume)
+      EventBus.off(EVENTS.TURN, onTurn)
     })
   }
 
   // Si el navegador pierde el contexto WebGL (poca memoria, app en segundo plano), Vue avisa y ofrece reintentar
   private watchRenderer() {
     const canvas = this.game.canvas
-    const onLost = () => EventBus.emit('render-lost')
+    const onLost = () => EventBus.emit(EVENTS.RENDER_LOST)
     canvas.addEventListener('webglcontextlost', onLost)
     this.events.once('shutdown', () => canvas.removeEventListener('webglcontextlost', onLost))
   }
 
   private feed(text: string, mine = false) {
-    EventBus.emit('feed', { text, mine })
+    EventBus.emit(EVENTS.FEED, { text, mine })
   }
 
   private emitHud() {
-    EventBus.emit('score-changed', {
+    EventBus.emit(EVENTS.SCORE_CHANGED, {
       score: this.player.score,
       length: this.player.length,
       botsKilled: this.player.kills,
@@ -656,6 +635,6 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private emitLeaderboard() {
-    if (this.mode === 'arena') EventBus.emit('leaderboard', this.rankingRows())
+    if (this.mode === 'arena') EventBus.emit(EVENTS.LEADERBOARD, this.rankingRows())
   }
 }

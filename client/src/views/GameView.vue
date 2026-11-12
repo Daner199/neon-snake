@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, ApiError } from '../api'
 import GameCanvas from '../components/GameCanvas.vue'
-import { EventBus } from '../game/EventBus'
-import type { GameOverStats, LeaderboardRow } from '../game/scenes/ArenaScene'
+import { EventBus, EVENTS } from '../events/EventBus'
+import type { Direction, FeedPayload, GameOverStats, LeaderboardRow, ScorePayload } from '../events/names'
 import { enterGameScreen, leaveGameScreen } from '../screen'
 import { sounds } from '../sound'
 import { useAuthStore } from '../stores/auth'
@@ -97,13 +97,13 @@ async function saveGame(stats: GameOverStats) {
 function pauseGame() {
   if (store.gameOver || paused.value) return
   paused.value = true
-  EventBus.emit('pause')
+  EventBus.emit(EVENTS.PAUSE)
 }
 
 function togglePause() {
   if (store.gameOver) return
   paused.value = !paused.value
-  EventBus.emit(paused.value ? 'pause' : 'resume')
+  EventBus.emit(paused.value ? EVENTS.PAUSE : EVENTS.RESUME)
 }
 
 // "Jugar otra vez" crea el juego de cero (como al entrar desde el menú), cambiando la key de GameCanvas.
@@ -117,8 +117,8 @@ function playAgain() {
   round.value++
 }
 
-function turn(d: 'up' | 'down' | 'left' | 'right') {
-  EventBus.emit('turn', d)
+function turn(d: Direction) {
+  EventBus.emit(EVENTS.TURN, d)
 }
 
 const formatTime = (ms: number) => {
@@ -126,20 +126,20 @@ const formatTime = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-const onScore = (hud: { score: number; length: number; botsKilled: number }) => {
+const onScore = (hud: ScorePayload) => {
   store.score = hud.score
   store.length = hud.length
   store.botsKilled = hud.botsKilled
 }
 const onLeaderboard = (rows: LeaderboardRow[]) => (store.leaderboard = rows)
-const onFeed = (f: { text: string; mine: boolean }) => store.pushFeed(f.text, f.mine)
+const onFeed = (f: FeedPayload) => store.pushFeed(f.text, f.mine)
 const onGameOver = (stats: GameOverStats) => {
   store.finish(stats)
   saveGame(stats)
 }
 // Si la escena arranca con la partida ya pausada (celular en vertical), se lo recuerda
 const onSceneReady = () => {
-  if (paused.value) EventBus.emit('pause')
+  if (paused.value) EventBus.emit(EVENTS.PAUSE)
 }
 const onKey = (e: KeyboardEvent) => {
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause()
@@ -157,14 +157,14 @@ const onPlayerDied = ifSound(sounds.die)
 if (mustRotate.value) paused.value = true
 
 onMounted(() => {
-  EventBus.on('scene-ready', onSceneReady)
-  EventBus.on('score-changed', onScore)
-  EventBus.on('leaderboard', onLeaderboard)
-  EventBus.on('feed', onFeed)
-  EventBus.on('game-over', onGameOver)
-  EventBus.on('food-eaten', onFoodEaten)
-  EventBus.on('bot-killed', onBotKilled)
-  EventBus.on('player-died', onPlayerDied)
+  EventBus.on(EVENTS.SCENE_READY, onSceneReady)
+  EventBus.on(EVENTS.SCORE_CHANGED, onScore)
+  EventBus.on(EVENTS.LEADERBOARD, onLeaderboard)
+  EventBus.on(EVENTS.FEED, onFeed)
+  EventBus.on(EVENTS.GAME_OVER, onGameOver)
+  EventBus.on(EVENTS.FOOD_EATEN, onFoodEaten)
+  EventBus.on(EVENTS.BOT_KILLED, onBotKilled)
+  EventBus.on(EVENTS.PLAYER_DIED, onPlayerDied)
   window.addEventListener('keydown', onKey)
   compactQuery.addEventListener('change', updateCompact)
   touchQuery.addEventListener('change', updateOrientation)
@@ -173,14 +173,14 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   leaveGameScreen()
-  EventBus.off('scene-ready', onSceneReady)
-  EventBus.off('score-changed', onScore)
-  EventBus.off('leaderboard', onLeaderboard)
-  EventBus.off('feed', onFeed)
-  EventBus.off('game-over', onGameOver)
-  EventBus.off('food-eaten', onFoodEaten)
-  EventBus.off('bot-killed', onBotKilled)
-  EventBus.off('player-died', onPlayerDied)
+  EventBus.off(EVENTS.SCENE_READY, onSceneReady)
+  EventBus.off(EVENTS.SCORE_CHANGED, onScore)
+  EventBus.off(EVENTS.LEADERBOARD, onLeaderboard)
+  EventBus.off(EVENTS.FEED, onFeed)
+  EventBus.off(EVENTS.GAME_OVER, onGameOver)
+  EventBus.off(EVENTS.FOOD_EATEN, onFoodEaten)
+  EventBus.off(EVENTS.BOT_KILLED, onBotKilled)
+  EventBus.off(EVENTS.PLAYER_DIED, onPlayerDied)
   window.removeEventListener('keydown', onKey)
   compactQuery.removeEventListener('change', updateCompact)
   touchQuery.removeEventListener('change', updateOrientation)

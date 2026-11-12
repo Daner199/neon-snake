@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type Phaser from 'phaser'
-import { EventBus } from '../game/EventBus'
+import { EventBus, EVENTS } from '../events/EventBus'
 
 // Si el juego no arranca en este tiempo (WebGL bloqueado, poca memoria...), se avisa y se ofrece reintentar
 const START_TIMEOUT_MS = 8000
@@ -45,16 +45,16 @@ async function start() {
 }
 
 onMounted(() => {
-  EventBus.on('scene-ready', onReady)
-  EventBus.on('render-lost', onRenderLost)
+  EventBus.on(EVENTS.SCENE_READY, onReady)
+  EventBus.on(EVENTS.RENDER_LOST, onRenderLost)
   start()
 })
 
 onBeforeUnmount(() => {
   unmounted = true
   clearTimeout(timer)
-  EventBus.off('scene-ready', onReady)
-  EventBus.off('render-lost', onRenderLost)
+  EventBus.off(EVENTS.SCENE_READY, onReady)
+  EventBus.off(EVENTS.RENDER_LOST, onRenderLost)
   game?.destroy(true)
   game = null
 })

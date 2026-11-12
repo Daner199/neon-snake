@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { GameOverStats, LeaderboardRow } from '../game/scenes/ArenaScene'
+import type { GameOverStats, LeaderboardRow } from '../events/names'
 
 export interface FeedItem {
   id: number
