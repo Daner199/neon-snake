@@ -6,6 +6,8 @@ import {
   CELL,
   COLORS,
   COLS,
+  DISC_PX as DISC,
+  GLOW_PX as GLOW,
   GOLDEN_CHANCE,
   MAX_ZOOM,
   MIN_CELL_PX,
@@ -14,12 +16,15 @@ import {
   ROWS,
   SPEEDUP_MS,
   TARGET_CELL_PX,
+  TEXTURES,
 } from '../game/constants'
+import { explodeBody, makeBurst } from '../game/effects'
 import { randomTag } from '../game/names'
 import { SpritePool } from '../game/SpritePool'
 import { DIRS, Snake, type Cell } from '../game/Snake'
 import { EventBus } from '../events/EventBus'
 import { EVENTS, type Direction, type GameOverStats, type LeaderboardRow } from '../events/names'
+import type { GameOverData } from './GameOverScene'
 
 type Food = Cell & { golden: boolean }
 
@@ -34,15 +39,14 @@ function mix(a: number, b: number, t: number): number {
 }
 
 const WHITE = 0xffffff
-const DISC = 64 // tamaño en píxeles de la textura del círculo
-const GLOW = 128 // tamaño en píxeles de la textura del brillo
 const SAMPLE_GAP = CELL * 0.3 // distancia entre los círculos que forman el cuerpo
 const HEAD_RADIUS = CELL * 0.46
 const TAIL_RADIUS = CELL * 0.2
 
-// Escena principal: sirve para todos los modos de src/data/modos.json.
+// Escena de la partida: sirve para todos los modos de src/data/modos.json.
 // Del modo lee cuánta comida hay, cuántos rivales con IA y la velocidad.
-export class ArenaScene extends Phaser.Scene {
+// Las texturas las crea BootScene; al morir el jugador se pausa y lanza GameOverScene encima.
+export class GameScene extends Phaser.Scene {
   private modo: Modo = MODOS[0]
   private rivals = true // hay jugadores con IA: nombres, ranking en vivo y comida dorada
   private player!: Snake
@@ -71,7 +75,7 @@ export class ArenaScene extends Phaser.Scene {
   private tick = 0
 
   constructor() {
-    super('ArenaScene')
+    super('GameScene')
   }
 
   create() {
@@ -88,13 +92,12 @@ export class ArenaScene extends Phaser.Scene {
     this.tick = 0
 
     this.frozenDrawn = false
-    this.makeTextures()
-    this.add.image(0, 0, 'grid').setOrigin(0).setDepth(0)
-    this.foodGlows = new SpritePool(this, 'glow', 1, true)
-    this.foodDots = new SpritePool(this, 'disc', 2)
-    this.headGlows = new SpritePool(this, 'glow', 3, true)
-    this.bodies = new SpritePool(this, 'disc', 4)
-    this.makeParticles()
+    this.add.image(0, 0, TEXTURES.grid).setOrigin(0).setDepth(0)
+    this.foodGlows = new SpritePool(this, TEXTURES.glow, 1, true)
+    this.foodDots = new SpritePool(this, TEXTURES.disc, 2)
+    this.headGlows = new SpritePool(this, TEXTURES.glow, 3, true)
+    this.bodies = new SpritePool(this, TEXTURES.disc, 4)
+    this.burst = makeBurst(this)
 
     this.player = new Snake({ name: 'Tú', country: '', level: 1 }, COLORS.player, { x: 30, y: 20 }, DIRS.right, 4, true)
 
@@ -104,7 +107,7 @@ export class ArenaScene extends Phaser.Scene {
     this.minimap = null
     this.updateCamera()
     this.scale.on('resize', this.updateCamera, this)
-    this.events.once('shutdown', () => this.scale.off('resize', this.updateCamera, this))
+    this.onExit(() => this.scale.off('resize', this.updateCamera, this))
     this.setupInput()
     this.setupEvents()
     this.watchRenderer()
@@ -215,7 +218,8 @@ export class ArenaScene extends Phaser.Scene {
 
   private kill(victim: Snake, killer: Snake | null) {
     victim.alive = false
-    this.explode(victim)
+    // El jugador explota en GameOverScene (esta escena se pausa y sus partículas se quedarían quietas)
+    if (!victim.isPlayer) explodeBody(this.burst, victim.cells, victim.color)
 
     if (killer) {
       killer.score += POINTS.kill
@@ -251,9 +255,9 @@ export class ArenaScene extends Phaser.Scene {
     })
   }
 
+  // El jugador murió: la escena se detiene y GameOverScene hace el efecto final y avisa a Vue
   private gameOver(killer: Snake | null) {
     this.over = true
-    this.cameras.main.shake(250, 0.01)
     EventBus.emit(EVENTS.PLAYER_DIED)
     const ranking = this.rankingRows()
     const stats: GameOverStats = {
@@ -267,7 +271,9 @@ export class ArenaScene extends Phaser.Scene {
       rank: ranking.findIndex((r) => r.isPlayer) + 1,
       players: ranking.length,
     }
-    this.time.delayedCall(600, () => EventBus.emit(EVENTS.GAME_OVER, stats))
+    const data: GameOverData = { stats, body: [...this.player.cells], color: this.player.color }
+    this.scene.launch('GameOverScene', data)
+    this.scene.pause()
   }
 
   // ---------- Bots y comida ----------
@@ -331,38 +337,6 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   // ---------- Dibujo ----------
-
-  // Texturas que se pintan una sola vez: círculo blanco (se tiñe), brillo, cuadrícula y partícula
-  private makeTextures() {
-    if (!this.textures.exists('disc')) {
-      const t = this.textures.createCanvas('disc', DISC, DISC)!
-      t.context.fillStyle = 'white'
-      t.context.beginPath()
-      t.context.arc(DISC / 2, DISC / 2, DISC / 2 - 1, 0, Math.PI * 2)
-      t.context.fill()
-      t.refresh()
-    }
-    if (!this.textures.exists('glow')) {
-      const t = this.textures.createCanvas('glow', GLOW, GLOW)!
-      const gradient = t.context.createRadialGradient(GLOW / 2, GLOW / 2, 0, GLOW / 2, GLOW / 2, GLOW / 2)
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
-      gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.35)')
-      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-      t.context.fillStyle = gradient
-      t.context.fillRect(0, 0, GLOW, GLOW)
-      t.refresh()
-    }
-    if (!this.textures.exists('grid')) {
-      const g = this.make.graphics({ x: 0, y: 0 }, false)
-      g.lineStyle(1, COLORS.grid, 0.06)
-      for (let x = 0; x <= COLS; x++) g.lineBetween(x * CELL, 0, x * CELL, ROWS * CELL)
-      for (let y = 0; y <= ROWS; y++) g.lineBetween(0, y * CELL, COLS * CELL, y * CELL)
-      g.lineStyle(2, COLORS.grid, 0.35)
-      g.strokeRect(1, 1, COLS * CELL - 2, ROWS * CELL - 2)
-      g.generateTexture('grid', COLS * CELL, ROWS * CELL)
-      g.destroy()
-    }
-  }
 
   // La comida solo cambia en los ticks: se coloca entonces, no en cada fotograma
   private renderFood() {
@@ -532,35 +506,6 @@ export class ArenaScene extends Phaser.Scene {
     return label
   }
 
-  private makeParticles() {
-    if (!this.textures.exists('dot')) {
-      const t = this.make.graphics({ x: 0, y: 0 }, false)
-      t.fillStyle(WHITE, 1)
-      t.fillCircle(4, 4, 4)
-      t.generateTexture('dot', 8, 8)
-      t.destroy()
-    }
-    this.burst = this.add.particles(0, 0, 'dot', {
-      speed: { min: 30, max: 150 },
-      lifespan: 700,
-      scale: { start: 0.9, end: 0 },
-      alpha: { start: 1, end: 0 },
-      emitting: false,
-    })
-    this.burst.setDepth(20)
-  }
-
-  // Al morir, el cuerpo se deshace en partículas a lo largo de su forma
-  private explode(s: Snake) {
-    this.burst.setParticleTint(s.color)
-    const cells = s.cells
-    const every = Math.max(1, Math.floor(cells.length / 24))
-    for (let i = cells.length - 1; i >= 0; i -= every) {
-      const c = cells[i]
-      this.burst.explode(i === cells.length - 1 ? 12 : 4, c.x * CELL + CELL / 2, c.y * CELL + CELL / 2)
-    }
-  }
-
   // ---------- Controles y comunicación con Vue ----------
 
   private setupInput() {
@@ -592,7 +537,7 @@ export class ArenaScene extends Phaser.Scene {
     EventBus.on(EVENTS.PAUSE, onPause)
     EventBus.on(EVENTS.RESUME, onResume)
     EventBus.on(EVENTS.TURN, onTurn)
-    this.events.once('shutdown', () => {
+    this.onExit(() => {
       EventBus.off(EVENTS.PAUSE, onPause)
       EventBus.off(EVENTS.RESUME, onResume)
       EventBus.off(EVENTS.TURN, onTurn)
@@ -604,7 +549,20 @@ export class ArenaScene extends Phaser.Scene {
     const canvas = this.game.canvas
     const onLost = () => EventBus.emit(EVENTS.RENDER_LOST)
     canvas.addEventListener('webglcontextlost', onLost)
-    this.events.once('shutdown', () => canvas.removeEventListener('webglcontextlost', onLost))
+    this.onExit(() => canvas.removeEventListener('webglcontextlost', onLost))
+  }
+
+  // Limpieza al salir de la escena. Al destruir el juego (Salir, Jugar otra vez) Phaser emite
+  // "destroy" y no "shutdown": se escuchan los dos para no dejar oyentes colgados en el EventBus.
+  private onExit(fn: () => void) {
+    let done = false
+    const once = () => {
+      if (done) return
+      done = true
+      fn()
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, once)
+    this.events.once(Phaser.Scenes.Events.DESTROY, once)
   }
 
   private feed(text: string, mine = false) {

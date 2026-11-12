@@ -32,3 +32,8 @@ export const COLORS = {
   grid: 0x39ff14,
   bots: [0x3db8ff, 0xb36bff, 0xff9f43, 0x00e5d4, 0xffe15a, 0xff6b6b, 0x7c9cff, 0xf78fff],
 } as const
+
+// Texturas que crea BootScene una sola vez y usan las demás escenas (blancas: se tiñen con setTint)
+export const TEXTURES = { disc: 'disc', glow: 'glow', grid: 'grid', dot: 'dot' } as const
+export const DISC_PX = 64 // tamaño en píxeles de la textura del círculo
+export const GLOW_PX = 128 // tamaño en píxeles de la textura del brillo
