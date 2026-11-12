@@ -1,20 +1,31 @@
 <script setup lang="ts">
+// Pantalla de juego: arma la pantalla (lienzo de Phaser, HUD, mensajes, pausa y Game Over),
+// escucha el EventBus y pasa los datos a Pinia y a los componentes. No toca nada de Phaser.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, ApiError } from '../api'
-import { buscarModo, buscarSkin, MODOS } from '../data'
 import AvisoSkin from '../components/AvisoSkin.vue'
 import GameCanvas from '../components/GameCanvas.vue'
+import HudJuego from '../components/HudJuego.vue'
+import MenuPausa from '../components/MenuPausa.vue'
+import PantallaGameOver, { type SaveStatus } from '../components/PantallaGameOver.vue'
+import { buscarModo, MODOS } from '../data'
 import { EventBus, EVENTS } from '../events/EventBus'
-import type { Direction, FeedPayload, FoodEatenPayload, GameOverStats, LeaderboardRow, ScorePayload, SnakeDiedPayload } from '../events/names'
+import type {
+  Direction,
+  FeedPayload,
+  FoodEatenPayload,
+  GameOverStats,
+  LeaderboardRow,
+  ScorePayload,
+  SnakeDiedPayload,
+} from '../events/names'
 import { enterGameScreen, leaveGameScreen } from '../screen'
 import { sounds } from '../sound'
 import { useAuthStore } from '../stores/auth'
 import { useGameStore } from '../stores/game'
 import { useSettingsStore } from '../stores/settings'
 import { useSkinsStore } from '../stores/skins'
-
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
 
 const route = useRoute()
 // El router ya comprobó que el modo existe en src/data/modos.json
@@ -50,23 +61,11 @@ function updateOrientation() {
   if (mustRotate.value) pauseGame()
 }
 
-const playerRank = computed(() => store.leaderboard.findIndex((r) => r.isPlayer) + 1)
 const playersText = computed(() => {
   const n = store.leaderboard.length
   return `${n} ${n === 1 ? 'jugador' : 'jugadores'}`
 })
 const feedItems = computed(() => (compact.value ? store.feed.slice(0, 2) : store.feed))
-// Skins desbloqueadas en esta partida: se vuelven a mostrar en el Game Over con "Usarla"
-const nuevasSkins = computed(() => skins.nuevas.flatMap((id) => buscarSkin(id) ?? []))
-
-// Top 5 desplegable desde la píldora: se cierra al tocar otra vez o a los 3 segundos
-const showTop = ref(false)
-let topTimer: ReturnType<typeof setTimeout> | undefined
-function toggleTop() {
-  showTop.value = !showTop.value
-  clearTimeout(topTimer)
-  if (showTop.value) topTimer = setTimeout(() => (showTop.value = false), 3000)
-}
 
 // Guarda la partida en el servidor si hay sesión; los invitados no entran al ranking
 async function saveGame(stats: GameOverStats) {
@@ -132,11 +131,21 @@ function turn(d: Direction) {
   EventBus.emit(EVENTS.TURN, d)
 }
 
-const formatTime = (ms: number) => {
-  const s = Math.floor(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+// La skin elegida llega a Phaser solo por evento: al estar lista la escena y cada vez que se elige otra
+// (desde la pausa o con "Usarla" en el Game Over)
+function sendSkin() {
+  const { id, colorCabeza, colorCuerpo, colorFranja, colorBrillo } = skins.skinActual
+  EventBus.emit(EVENTS.SKIN_CHANGED, { id, colorCabeza, colorCuerpo, colorFranja, colorBrillo })
 }
+watch(() => skins.elegida, sendSkin)
 
+// ---------- Lo que avisa Phaser ----------
+
+// Al terminar create() la escena pide la skin; si arranca con la partida ya pausada (celular en vertical), se lo recuerda
+const onSceneReady = () => {
+  sendSkin()
+  if (paused.value) EventBus.emit(EVENTS.PAUSE)
+}
 const onScore = (hud: ScorePayload) => {
   store.score = hud.score
   store.length = hud.length
@@ -149,24 +158,6 @@ const onGameOver = (stats: GameOverStats) => {
   store.finish(stats)
   saveGame(stats)
 }
-// La skin elegida llega a Phaser solo por evento: al estar lista la escena y cada vez que se elige otra
-function sendSkin() {
-  const { id, colorCabeza, colorCuerpo, colorFranja, colorBrillo } = skins.skinActual
-  EventBus.emit(EVENTS.SKIN_CHANGED, { id, colorCabeza, colorCuerpo, colorFranja, colorBrillo })
-}
-watch(() => skins.elegida, sendSkin)
-// Skins para cambiar desde la pausa: solo las desbloqueadas
-const skinsDisponibles = computed(() => skins.catalogo.filter((s) => s.estado !== 'bloqueada'))
-
-// Al terminar create() la escena pide la skin; si arranca con la partida ya pausada (celular en vertical), se lo recuerda
-const onSceneReady = () => {
-  sendSkin()
-  if (paused.value) EventBus.emit(EVENTS.PAUSE)
-}
-const onKey = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause()
-  if (e.key === 'Enter' && store.gameOver) playAgain()
-}
 
 // Sonidos: Phaser avisa por el EventBus y aquí se reproducen si no está silenciado
 const ifSound = (fn: () => void) => () => {
@@ -178,11 +169,11 @@ const onSnakeDied = (e: SnakeDiedPayload) => {
   store.muerte = e
   ifSound(sounds.die)()
 }
-const motivo = computed(() => {
-  const m = store.muerte
-  if (m?.causa === 'jugador') return `Te eliminó ${m.eliminadoPor}`
-  return m?.causa === 'cuerpo' ? 'Chocaste contra tu cuerpo' : 'Chocaste contra el borde'
-})
+
+const onKey = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause()
+  if (e.key === 'Enter' && store.gameOver) playAgain()
+}
 
 if (mustRotate.value) paused.value = true
 
@@ -215,40 +206,12 @@ onBeforeUnmount(() => {
   compactQuery.removeEventListener('change', updateCompact)
   touchQuery.removeEventListener('change', updateOrientation)
   portraitQuery.removeEventListener('change', updateOrientation)
-  clearTimeout(topTimer)
 })
 </script>
 
 <template>
   <div class="juego" :class="{ compacto: compact, horizontal: landscapeTouch }">
-    <header class="hud">
-      <div class="marcador">
-        <div><span>PUNTOS</span><strong>{{ store.score }}</strong></div>
-        <template v-if="conRivales">
-          <div><span>ELIMINADOS</span><strong class="rosa">{{ store.botsKilled }}</strong></div>
-          <div><span>SERPIENTES</span><strong class="blanco">{{ store.leaderboard.length }}</strong></div>
-          <div v-if="compact"><span>PUESTO</span><strong class="oro">{{ playerRank }}</strong></div>
-        </template>
-        <div v-else><span>TAMAÑO</span><strong class="blanco">{{ store.length }}</strong></div>
-        <div v-if="!compact || !conRivales"><span>RÉCORD</span><strong class="oro">{{ store.bestScore }}</strong></div>
-      </div>
-      <div class="acciones">
-        <button
-          class="btn sonido"
-          type="button"
-          :aria-label="settings.muted ? 'Activar sonido' : 'Silenciar'"
-          :aria-pressed="settings.muted"
-          :title="settings.muted ? 'Activar sonido' : 'Silenciar'"
-          @click="settings.toggleMute()"
-        >
-          {{ settings.muted ? '🔇' : '🔊' }}
-        </button>
-        <button class="btn" type="button" :aria-label="paused ? 'Continuar' : 'Pausar'" @click="togglePause">
-          {{ compact ? (paused ? '▶' : '⏸') : paused ? 'Continuar' : 'Pausa' }}
-        </button>
-        <RouterLink class="btn" to="/" aria-label="Salir">{{ compact ? '✕' : 'Salir' }}</RouterLink>
-      </div>
-    </header>
+    <HudJuego :con-rivales="conRivales" :compact="compact" :paused="paused" @pausa="togglePause" />
 
     <div class="escenario">
       <GameCanvas :key="round" :mode="mode" />
@@ -264,20 +227,6 @@ onBeforeUnmount(() => {
         <li v-for="f in feedItems" :key="f.id" :class="{ mio: f.mine }">{{ f.text }}</li>
       </TransitionGroup>
 
-      <div v-if="conRivales && compact" class="puesto">
-        <button class="pildora" type="button" :aria-expanded="showTop" @click="toggleTop">
-          Puesto {{ playerRank }} de {{ store.leaderboard.length }}
-        </button>
-        <ol v-if="showTop" class="top5" aria-label="Top 5 de la arena">
-          <li v-for="(r, i) in store.leaderboard.slice(0, 5)" :key="r.id" :class="{ yo: r.isPlayer }">
-            <span class="pos">{{ i + 1 }}</span>
-            <span class="punto" :style="{ background: r.color }"></span>
-            <span class="nombre">{{ r.name }}</span>
-            <span class="pts">{{ r.score }}</span>
-          </li>
-        </ol>
-      </div>
-
       <aside v-if="conRivales && !compact" class="ranking" aria-label="Ranking de la arena">
         <h2>EN ESTA ARENA <span class="cuantos">· {{ playersText }}</span></h2>
         <ol>
@@ -291,70 +240,13 @@ onBeforeUnmount(() => {
         </ol>
       </aside>
 
-      <div v-if="paused && !store.gameOver" class="capa">
-        <div class="tarjeta">
-          <h2 class="titulo-capa">PAUSA</h2>
-          <button class="btn btn--primario" type="button" @click="togglePause">Continuar</button>
-          <button class="btn" type="button" :aria-pressed="settings.muted" @click="settings.toggleMute()">
-            {{ settings.muted ? '🔇 Sonido apagado' : '🔊 Sonido encendido' }}
-          </button>
-          <div class="fila-skin" role="group" aria-label="Skin">
-            <span>Skin</span>
-            <div class="circulos">
-              <button
-                v-for="s in skinsDisponibles"
-                :key="s.id"
-                class="circulo"
-                :class="{ activo: s.estado === 'activa' }"
-                type="button"
-                :style="{ '--skin-cuerpo': s.colorCuerpo, '--skin-brillo': s.colorBrillo }"
-                :title="s.nombre"
-                :aria-label="s.nombre"
-                :aria-pressed="s.estado === 'activa'"
-                @click="skins.elegir(s.id)"
-              ></button>
-            </div>
-          </div>
-          <RouterLink class="btn" to="/">Salir al menú</RouterLink>
-        </div>
-      </div>
-
-      <div v-if="store.gameOver" class="capa">
-        <div class="tarjeta" role="dialog" aria-labelledby="go-titulo">
-          <h2 id="go-titulo" class="titulo-capa rosa">GAME OVER</h2>
-          <p class="motivo">
-            {{ motivo }}
-          </p>
-          <p class="puntos">{{ store.gameOver.score }}</p>
-          <p v-if="store.newRecord" class="record">¡Nuevo récord!</p>
-          <p v-else class="suave">Tu récord: {{ store.bestScore }}</p>
-          <div v-if="nuevasSkins.length" class="skins-nuevas">
-            <div v-for="s in nuevasSkins" :key="s.id" class="skin-nueva" :style="{ '--skin-cuerpo': s.colorCuerpo, '--skin-brillo': s.colorBrillo }">
-              <span class="punto-skin" aria-hidden="true"></span>
-              <span class="skin-nueva__texto">¡Nueva skin: <strong>{{ s.nombre }}</strong>!</span>
-              <span v-if="skins.elegida === s.id" class="en-uso">En uso</span>
-              <button v-else class="btn usar" type="button" @click="skins.elegir(s.id)">Usarla</button>
-            </div>
-          </div>
-          <p v-if="saveStatus === 'guest'" class="aviso">
-            <RouterLink to="/login">Inicia sesión</RouterLink> para entrar al ranking
-          </p>
-          <p v-else-if="saveStatus !== 'idle'" class="aviso" :class="{ 'aviso--error': saveStatus === 'error' }" role="status">
-            {{ saveMessage }}
-          </p>
-          <div class="stats">
-            <div><strong>{{ store.gameOver.length }}</strong><span>Tamaño final</span></div>
-            <div v-if="conRivales"><strong class="rosa">{{ store.gameOver.botsKilled }}</strong><span>Jugadores eliminados</span></div>
-            <div><strong>{{ formatTime(store.gameOver.durationMs) }}</strong><span>Tiempo</span></div>
-            <div v-if="conRivales"><strong>{{ store.gameOver.rank }}.º / {{ store.gameOver.players }}</strong><span>En la arena</span></div>
-          </div>
-          <button class="btn btn--primario grande" type="button" @click="playAgain">Jugar otra vez</button>
-          <div class="fila">
-            <RouterLink class="btn" to="/ranking">Ver ranking</RouterLink>
-            <RouterLink class="btn" to="/">Menú</RouterLink>
-          </div>
-        </div>
-      </div>
+      <MenuPausa v-if="paused && !store.gameOver" @continuar="togglePause" />
+      <PantallaGameOver
+        :con-rivales="conRivales"
+        :save-status="saveStatus"
+        :save-message="saveMessage"
+        @jugar-otra-vez="playAgain"
+      />
     </div>
 
     <div v-if="mustRotate" class="girar" role="alert">
@@ -386,88 +278,6 @@ onBeforeUnmount(() => {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-}
-.hud {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-}
-.marcador,
-.acciones {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  align-items: center;
-}
-.acciones {
-  gap: 8px;
-}
-.marcador div {
-  display: flex;
-  flex-direction: column;
-}
-.marcador span {
-  font-size: 12px;
-  color: var(--color-texto-suave);
-}
-.marcador strong {
-  font-family: var(--fuente-titulo);
-  font-size: 18px;
-  color: var(--color-primario);
-}
-.blanco {
-  color: var(--color-texto) !important;
-}
-.rosa {
-  color: var(--color-peligro) !important;
-}
-.oro {
-  color: var(--color-oro) !important;
-}
-.hud .btn {
-  min-height: 44px;
-}
-.hud .sonido {
-  width: 44px;
-  padding: 0;
-  font-size: 18px;
-}
-/* HUD compacto: una sola fila */
-.compacto .hud {
-  flex-wrap: nowrap;
-  gap: 8px;
-  padding: 6px 10px;
-}
-.compacto .marcador {
-  flex-wrap: nowrap;
-  gap: 14px;
-  min-width: 0;
-}
-.compacto .marcador span {
-  font-size: 9px;
-  letter-spacing: 0.5px;
-}
-.compacto .marcador strong {
-  font-size: 13px;
-}
-.compacto .acciones {
-  flex-wrap: nowrap;
-  gap: 6px;
-}
-.compacto .hud .btn {
-  min-height: 36px;
-  height: 36px;
-  min-width: 36px;
-  padding: 0 10px;
-  font-size: 14px;
-}
-.compacto .hud .sonido {
-  width: 36px;
-  padding: 0;
-  font-size: 15px;
 }
 .escenario {
   position: relative;
@@ -552,46 +362,12 @@ onBeforeUnmount(() => {
   letter-spacing: 0;
   font-weight: 400;
 }
-.puesto {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.pildora {
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--color-borde);
-  background: color-mix(in srgb, var(--color-superficie) 88%, transparent);
-  color: var(--color-texto);
-  font: 600 13px var(--fuente-cuerpo);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.top5 {
-  margin: 6px 0 0;
-  padding: 6px;
-  min-width: 210px;
-  list-style: none;
-  border-radius: 12px;
-  border: 1px solid var(--color-borde);
-  background: color-mix(in srgb, var(--color-superficie) 94%, transparent);
-}
-.top5 li {
-  font-size: 13px;
-}
 .ranking ol {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.ranking li,
-.top5 li {
+.ranking li {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -599,8 +375,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   font-size: 14px;
 }
-.ranking li.yo,
-.top5 li.yo {
+.ranking li.yo {
   background: color-mix(in srgb, var(--color-primario) 14%, transparent);
   font-weight: 700;
 }
@@ -625,180 +400,6 @@ onBeforeUnmount(() => {
 }
 .pts {
   font-variant-numeric: tabular-nums;
-}
-.capa {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  display: flex;
-  background: color-mix(in srgb, var(--color-fondo) 70%, transparent);
-  backdrop-filter: blur(3px);
-  padding: 16px;
-  overflow-y: auto;
-  touch-action: pan-y;
-}
-.tarjeta {
-  /* margin: auto centra la tarjeta y, si no cabe, deja desplazarse hasta arriba */
-  margin: auto;
-  width: min(520px, 100%);
-  padding: 32px;
-  border-radius: 22px;
-  background: var(--color-superficie);
-  border: 1px solid var(--color-borde);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  text-align: center;
-}
-.titulo-capa {
-  margin: 0;
-  font-family: var(--fuente-titulo);
-  font-size: 28px;
-  color: var(--color-primario);
-}
-.motivo,
-.suave {
-  margin: 0;
-  color: var(--color-texto-suave);
-}
-.puntos {
-  margin: 0;
-  font-family: var(--fuente-titulo);
-  font-size: 40px;
-  color: var(--color-primario);
-}
-.record {
-  margin: 0;
-  font-weight: 700;
-  color: var(--color-oro);
-}
-.aviso {
-  margin: 0;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--color-borde);
-  background: var(--color-fondo);
-  font-size: 14px;
-  font-weight: 600;
-}
-.fila-skin {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--color-borde);
-  font-weight: 600;
-}
-.circulos {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-}
-.circulo {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-}
-.circulo::before {
-  content: '';
-  display: block;
-  width: 22px;
-  height: 22px;
-  margin: auto;
-  border-radius: 50%;
-  background: var(--skin-cuerpo);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--skin-brillo) 60%, transparent);
-}
-.circulo.activo::before {
-  outline: 2px solid var(--color-texto);
-  outline-offset: 3px;
-}
-.skins-nuevas {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-.skin-nueva {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 8px 8px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--skin-cuerpo);
-  background: var(--color-fondo);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--skin-brillo) 30%, transparent);
-  text-align: left;
-}
-.skin-nueva__texto {
-  flex: 1;
-  font-weight: 600;
-}
-.skin-nueva strong {
-  color: var(--skin-cuerpo);
-}
-.punto-skin {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--skin-cuerpo);
-  box-shadow: 0 0 8px var(--skin-brillo);
-}
-.usar {
-  min-height: 40px;
-  padding: 0 16px;
-  font-size: 14px;
-}
-.en-uso {
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-primario);
-}
-.aviso--error {
-  border-color: var(--color-peligro);
-  color: var(--color-peligro);
-}
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: 10px;
-  width: 100%;
-}
-.stats div {
-  padding: 10px;
-  border-radius: 12px;
-  background: var(--color-fondo);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.stats span {
-  font-size: 12px;
-  color: var(--color-texto-suave);
-}
-.grande {
-  width: 100%;
-  min-height: 56px;
-  font-size: 18px;
-}
-.fila {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  width: 100%;
-}
-.tarjeta > .btn:not(.grande) {
-  width: 100%;
 }
 .cruceta {
   display: none;
@@ -828,46 +429,6 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
 }
-.horizontal .hud {
-  position: absolute;
-  inset: 0 0 auto 0;
-  z-index: 6;
-  align-items: flex-start;
-  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0
-    max(10px, env(safe-area-inset-left));
-  pointer-events: none;
-}
-.horizontal .hud > * {
-  pointer-events: auto;
-}
-.horizontal .marcador {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-.horizontal .hud .btn {
-  height: 32px;
-  min-height: 32px;
-  min-width: 32px;
-  padding: 0 8px;
-  font-size: 13px;
-}
-.horizontal .hud .sonido {
-  width: 32px;
-  padding: 0;
-}
-.horizontal .puesto {
-  top: calc(max(8px, env(safe-area-inset-top)) + 40px);
-  left: auto;
-  right: max(10px, env(safe-area-inset-right));
-  transform: none;
-  align-items: flex-end;
-}
-.horizontal .pildora {
-  min-height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
-}
 .horizontal .cruceta {
   position: absolute;
   left: max(10px, env(safe-area-inset-left));
@@ -883,34 +444,6 @@ onBeforeUnmount(() => {
   width: 48px;
   height: 48px;
   font-size: 16px;
-}
-/* En horizontal la tarjeta de pausa / Game Over es más compacta para caber en poca altura */
-.horizontal .tarjeta {
-  width: min(560px, 100%);
-  padding: 16px 20px;
-  gap: 8px;
-}
-.horizontal .titulo-capa {
-  font-size: 20px;
-}
-.horizontal .puntos {
-  font-size: 28px;
-}
-.horizontal .stats div {
-  padding: 6px;
-}
-.horizontal .grande {
-  min-height: 44px;
-  font-size: 16px;
-}
-.horizontal .tarjeta .btn {
-  min-height: 40px;
-}
-.horizontal .skin-nueva {
-  padding: 4px 4px 4px 12px;
-}
-.horizontal .tarjeta .usar {
-  min-height: 34px;
 }
 /* Aviso para girar el celular: cubre todo y la partida queda en pausa */
 .girar {
