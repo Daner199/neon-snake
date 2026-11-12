@@ -2,12 +2,12 @@
 
 **Jugar:** https://neon-snake-web.onrender.com (la primera visita puede tardar hasta 1 minuto si el servidor estaba dormido)
 
-Juego de Snake para navegador con un modo **Arena con bots**: serpientes controladas por la computadora que puedes eliminar haciéndolas chocar contra tu cuerpo. También tiene modo **Clásico**.
+Juego de Snake para navegador con un modo **Arena con bots**: serpientes controladas por la computadora que puedes eliminar haciéndolas chocar contra tu cuerpo. También tiene modo **Clásico** y **skins** que se desbloquean con el puntaje.
 
 | Parte | Tecnología | Carpeta |
 | --- | --- | --- |
 | Interfaz | Vue 3 + Vite + TypeScript + Pinia + Vue Router | `client/` |
-| Motor del juego | Phaser 3 | `client/src/game/` |
+| Motor del juego | Phaser 3 | `client/src/scenes/`, `client/src/game/` |
 | API | Node.js + Express 5 + TypeScript + Prisma 6 | `server/` |
 | Base de datos | PostgreSQL 16 (Docker) + Prisma | `docker-compose.yml`, `server/prisma/` |
 
@@ -61,10 +61,14 @@ Si `npm run build` del cliente falla con "memory allocation failed" (poca RAM li
 neon-snake/
 ├── client/                    Interfaz y juego
 │   ├── src/
-│   │   ├── views/             Pantallas: menú, modos, juego, ranking, login, 404
-│   │   ├── components/        GameCanvas.vue monta Phaser dentro de Vue
-│   │   ├── game/              Escenas de Phaser, bots y EventBus (Vue <-> Phaser)
-│   │   ├── stores/            Estado compartido (Pinia): partida, sesión y ajustes
+│   │   ├── views/             Pantallas de Vue: menú, modos, skins, juego, ranking, login, 404
+│   │   ├── components/        HUD, pausa, Game Over, aviso de skin y GameCanvas (monta Phaser)
+│   │   ├── scenes/            Escenas de Phaser: Boot, Game y GameOver
+│   │   ├── game/              Entidades del juego: serpiente, bots, colores y medidas
+│   │   ├── stores/            Pinia: partida, skins, ajustes y sesión (solo lo que se ve)
+│   │   ├── data/              JSON del juego: skins, modos y nombres de los jugadores con IA
+│   │   ├── events/            EventBus y nombres de los eventos: el único puente Vue <-> Phaser
+│   │   ├── logic/             Reglas puras (desbloqueo de skins), con sus pruebas
 │   │   ├── api.ts             Llamadas a /api
 │   │   └── sound.ts           Efectos de sonido con Web Audio
 │   ├── Dockerfile             Compila el juego y lo sirve con nginx
@@ -77,11 +81,23 @@ neon-snake/
 │   │   └── services/          Tokens y ranking
 │   ├── prisma/                Tablas (schema.prisma), migraciones y datos iniciales
 │   └── Dockerfile             Migra la base de datos y levanta la API
-├── docs/mockups/              Diseño de las pantallas
+├── docs/
+│   ├── prototipo.md           Hoja del prototipo: pantallas, escenas, eventos, datos y escalabilidad
+│   └── mockups/               Diseño de las pantallas
 ├── .env.example               Todas las variables de entorno
 ├── render.yaml                Publicar en Render (API y juego)
 └── docker-compose.yml         Base de datos, API y web
 ```
+
+**Skins y modos.** Para agregar una skin se añade un elemento a `client/src/data/skins.json` (nombre, descripción, cuatro colores `#rrggbb` y el puntaje que hay que conseguir en una sola partida para desbloquearla). Para un modo, un elemento en `modos.json` (comida, jugadores con IA y velocidad). No hace falta tocar código: el selector de skins, Elegir modo, el ranking y la escena leen el JSON. `npm test` revisa que no falte ningún campo. Para que un modo nuevo entre al ranking en línea, también hay que agregar su id en `server/src/services/ranking.ts`.
+
+**Reglas de arquitectura** (detalle en [docs/prototipo.md](docs/prototipo.md)):
+
+- Vue solo hace pantallas, botones, textos y HUD; nunca toca sprites.
+- Phaser solo hace escenas, sprites, física y animaciones; nunca toca el HTML.
+- Pinia solo guarda datos que la interfaz muestra (puntaje, récord, skins, ajustes).
+- Los eventos de `src/events/names.ts` son el único puente entre Vue y Phaser.
+- Los datos del juego viven en JSON (`src/data/`).
 
 ## API
 
@@ -99,6 +115,7 @@ neon-snake/
 | --- | --- | --- |
 | `client/` | `npm run dev` | Juego en modo desarrollo |
 | `client/` | `npm run build` | Versión para publicar |
+| `client/` | `npm test` | Pruebas de la lógica (skins, serpiente y JSON) con Vitest |
 | `server/` | `npm run dev` | API con recarga automática |
 | `server/` | `npm run build` | Compila la API |
 | `server/` | `npm run db:studio` | Ver y editar las tablas en el navegador |

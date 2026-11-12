@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import type Phaser from 'phaser'
 import { EventBus, EVENTS } from '../events/EventBus'
+
+// Lo único que Vue necesita del juego: poder destruirlo. Phaser se carga aparte con import() al jugar.
+type GameHandle = { destroy(removeCanvas: boolean): void }
 
 // Si el juego no arranca en este tiempo (WebGL bloqueado, poca memoria...), se avisa y se ofrece reintentar
 const START_TIMEOUT_MS = 8000
 
 const props = defineProps<{ mode: string }>()
-let game: Phaser.Game | null = null
+let game: GameHandle | null = null
 let unmounted = false
 let timer: ReturnType<typeof setTimeout> | undefined
 const loading = ref(true)
