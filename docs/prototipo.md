@@ -37,7 +37,7 @@ flowchart LR
 | --- | --- | --- |
 | **Menú** (`/`) | Arriba a la izquierda "Jugando como …" y a la derecha "Iniciar sesión" o "Cerrar sesión". Al centro el título NEON SNAKE, el lema y el botón grande **Jugar ahora**. Debajo, en columna: **Elegir modo**, **Skins** (con la skin elegida en miniatura) y **Ranking**. | Nombre del jugador, skin elegida. |
 | **Elegir modo** (`/modos`) | Arriba a la izquierda **‹ Volver** y el título. Debajo, una tarjeta por modo (nombre y descripción), sacadas de `modos.json`. | Ninguno (solo lee el JSON). |
-| **Skins** (`/skins`) | Arriba **‹ Volver**, el título y "Tu récord: N puntos". Debajo, una cuadrícula de tarjetas (1 columna en el celular, 3 en PC). Cada tarjeta: serpiente de vista previa, nombre, descripción y abajo el estado: **En uso**, botón **Usar** o 🔒 "Te faltan N puntos". | Skin elegida, skins desbloqueadas, récord. |
+| **Skins** (`/skins`) | Arriba **‹ Volver**, el título y "Tu récord: N puntos" (con sesión). Si juegas como invitado, debajo un aviso con el enlace "Inicia sesión". Debajo, una cuadrícula de tarjetas (1 columna en el celular, 3 en PC). Cada tarjeta: serpiente de vista previa, nombre, descripción y abajo el estado: **En uso**, botón **Usar** o 🔒 "Te faltan N puntos". | Skin elegida, skins desbloqueadas, récord. |
 | **Ranking** (`/ranking`) | Arriba **‹ Volver** y el título. Debajo, una pestaña por modo y la tabla del top 10 (puesto, jugador, eliminados, puntos); tu fila aparte si no estás en el top. | Pestaña elegida, filas del servidor. |
 | **Login** (`/login`) | Tarjeta centrada con **✕** arriba a la derecha, el título y el formulario (usuario, correo al crear cuenta y contraseña). | Sesión (token y usuario). |
 | **Juego · HUD** (`/jugar/:modo`) | Barra de arriba. A la izquierda el puntaje: PUNTOS, ELIMINADOS, SERPIENTES (o TAMAÑO en Clásico), PUESTO (celular) y RÉCORD. A la derecha: sonido, **Pausa** y **Salir**. En PC, el ranking en vivo arriba a la derecha. Arriba al centro, el aviso "¡Nueva skin: Fuego!" y los mensajes ("X te eliminó"). En el celular: los mensajes abajo, la píldora "Puesto 3 de 8" a la derecha y la cruceta abajo a la izquierda. | Puntos, tamaño, eliminados, puesto, ranking en vivo, mensajes, aviso de skin. |
@@ -247,7 +247,6 @@ Pasar de 6 a 20 skins, o de 2 a 10 modos, no cambia el código: solo se agregan 
 | game | `length` | número | HUD (TAMAÑO en Clásico) |
 | game | `botsKilled` | número | HUD (ELIMINADOS) |
 | game | `bestScore` | número | HUD (RÉCORD) y Game Over |
-| game | `recordGlobal` | número | Skins ("Tu récord" y lo que falta) |
 | game | `newRecord` | sí / no | Game Over ("¡Nuevo récord!") |
 | game | `leaderboard` | lista | Juego (ranking en vivo y píldora del puesto) |
 | game | `feed` | lista | Juego (mensajes "X te eliminó") |
@@ -257,15 +256,18 @@ Pasar de 6 a 20 skins, o de 2 a 10 modos, no cambia el código: solo se agregan 
 | skins | `elegida` | texto | Menú (miniatura), Skins (En uso) y Pausa |
 | skins | `desbloqueadas` | lista | Skins (Usar / bloqueada) y Pausa (círculos) |
 | skins | `nuevas` | lista | Juego (aviso) y Game Over (Usarla) |
+| skins | `recordCuenta` | número | Skins ("Tu récord" y lo que falta) |
 | settings | `muted` | sí / no | HUD y Pausa (sonido) |
 | auth | `user` | objeto | Menú ("Jugando como …") |
 | auth | `token` | texto | No se muestra: es la sesión para guardar la partida en el servidor |
 
 ## Flujo del desbloqueo
 
+Las skins se desbloquean solo con sesión iniciada y quedan en la cuenta: al entrar, Pinia pide al servidor la mejor partida de la cuenta (la misma del ranking) y desbloquea lo que alcance. Los invitados solo tienen la primera skin.
+
 1. Phaser (GameScene) emite `score-changed` cada vez que cambia el puntaje.
 2. GameView lo escucha, actualiza `useGameStore` y llama a `skins.comprobar(puntaje)`.
-3. Pinia compara el puntaje con el `puntajeRequerido` de cada skin del JSON. Si alcanza una nueva, la agrega a `desbloqueadas` y a `nuevas`.
+3. Si hay sesión, Pinia compara el puntaje con el `puntajeRequerido` de cada skin del JSON. Si alcanza una nueva, la agrega a `desbloqueadas` y a `nuevas`. Si es invitado, no desbloquea nada.
 4. Vue muestra un aviso pequeño durante la partida: "¡Nueva skin: Fuego!" (2,5 s, arriba al centro, sin tapar el juego en el celular). En el Game Over aparece de nuevo con un botón "Usarla".
 
 Pinia no guarda nada que no se muestre: `elegida` y `desbloqueadas` las muestra el selector de skins; `nuevas`, el aviso y el Game Over.

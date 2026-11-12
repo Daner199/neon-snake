@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import SkinPreview from '../components/SkinPreview.vue'
-import { useGameStore } from '../stores/game'
+import { useAuthStore } from '../stores/auth'
 import { useSkinsStore } from '../stores/skins'
 
-// Selector de skins: una tarjeta por skin de src/data/skins.json con su estado (en uso, disponible o bloqueada)
+// Selector de skins: una tarjeta por skin de src/data/skins.json con su estado (en uso, disponible o bloqueada).
+// Las skins se desbloquean solo con sesión iniciada; los invitados ven qué hace falta para cada una.
 const skins = useSkinsStore()
-const game = useGameStore()
+const auth = useAuthStore()
 
 const puntos = (n: number) => `${n} ${n === 1 ? 'punto' : 'puntos'}`
 </script>
@@ -16,9 +17,14 @@ const puntos = (n: number) => `${n} ${n === 1 ? 'punto' : 'puntos'}`
       <RouterLink class="btn" to="/">‹ Volver</RouterLink>
       <div>
         <h1 class="titulo">SKINS</h1>
-        <p class="record">Tu récord: <strong>{{ puntos(game.recordGlobal) }}</strong></p>
+        <p v-if="auth.loggedIn" class="record">Tu récord: <strong>{{ puntos(skins.recordCuenta) }}</strong></p>
       </div>
     </header>
+
+    <p v-if="!auth.loggedIn" class="invitado">
+      Juegas como invitado. <RouterLink to="/login">Inicia sesión</RouterLink> para desbloquear skins: quedan
+      guardadas en tu cuenta.
+    </p>
 
     <div class="skins">
       <article
@@ -40,7 +46,11 @@ const puntos = (n: number) => `${n} ${n === 1 ? 'punto' : 'puntos'}`
           </button>
           <span v-else class="candado">
             <span aria-hidden="true">🔒</span>
-            {{ s.faltan > 0 ? `Te faltan ${puntos(s.faltan)}` : `Consigue ${puntos(s.puntajeRequerido)} en una partida` }}
+            {{
+              auth.loggedIn && s.faltan > 0
+                ? `Te faltan ${puntos(s.faltan)}`
+                : `Consigue ${puntos(s.puntajeRequerido)} en una partida`
+            }}
           </span>
         </div>
       </article>
@@ -74,6 +84,14 @@ const puntos = (n: number) => `${n} ${n === 1 ? 'punto' : 'puntos'}`
 }
 .record strong {
   color: var(--color-oro);
+}
+.invitado {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto-suave);
 }
 .skins {
   display: grid;

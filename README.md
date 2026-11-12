@@ -89,7 +89,7 @@ neon-snake/
 └── docker-compose.yml         Base de datos, API y web
 ```
 
-**Skins y modos.** Para agregar una skin se añade un elemento a `client/src/data/skins.json` (nombre, descripción, cuatro colores `#rrggbb` y el puntaje que hay que conseguir en una sola partida para desbloquearla). Para un modo, un elemento en `modos.json` (comida, jugadores con IA y velocidad). No hace falta tocar código: el selector de skins, Elegir modo, el ranking y la escena leen el JSON. `npm test` revisa que no falte ningún campo. Para que un modo nuevo entre al ranking en línea, también hay que agregar su id en `server/src/services/ranking.ts`.
+**Skins y modos.** Para agregar una skin se añade un elemento a `client/src/data/skins.json` (nombre, descripción, cuatro colores `#rrggbb` y el puntaje que hay que conseguir en una sola partida para desbloquearla). Las skins se desbloquean solo con sesión iniciada: salen de la mejor partida de la cuenta guardada en el servidor, así que se tienen en cualquier navegador. Los invitados solo tienen la primera. Para un modo, un elemento en `modos.json` (comida, jugadores con IA, velocidad y si se puede atravesar el propio cuerpo). No hace falta tocar código: el selector de skins, Elegir modo, el ranking y la escena leen el JSON. `npm test` revisa que no falte ningún campo. Para que un modo nuevo entre al ranking en línea, también hay que agregar su id en `server/src/services/ranking.ts`.
 
 **Reglas de arquitectura** (detalle en [docs/prototipo.md](docs/prototipo.md)):
 

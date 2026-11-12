@@ -47,7 +47,7 @@ const formatTime = (ms: number) => {
       </div>
     </div>
     <p v-if="saveStatus === 'guest'" class="aviso">
-      <RouterLink to="/login">Inicia sesión</RouterLink> para entrar al ranking
+      <RouterLink to="/login">Inicia sesión</RouterLink> para entrar al ranking y desbloquear skins
     </p>
     <p v-else-if="saveStatus !== 'idle'" class="aviso" :class="{ 'aviso--error': saveStatus === 'error' }" role="status">
       {{ saveMessage }}
