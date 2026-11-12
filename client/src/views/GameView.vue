@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, ApiError } from '../api'
-import { buscarModo, MODOS } from '../data'
+import { buscarModo, buscarSkin, MODOS } from '../data'
+import AvisoSkin from '../components/AvisoSkin.vue'
 import GameCanvas from '../components/GameCanvas.vue'
 import { EventBus, EVENTS } from '../events/EventBus'
 import type { Direction, FeedPayload, FoodEatenPayload, GameOverStats, LeaderboardRow, ScorePayload, SnakeDiedPayload } from '../events/names'
@@ -11,6 +12,7 @@ import { sounds } from '../sound'
 import { useAuthStore } from '../stores/auth'
 import { useGameStore } from '../stores/game'
 import { useSettingsStore } from '../stores/settings'
+import { useSkinsStore } from '../stores/skins'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
 
@@ -22,11 +24,13 @@ const conRivales = modo.jugadores > 0
 const store = useGameStore()
 const auth = useAuthStore()
 const settings = useSettingsStore()
+const skins = useSkinsStore()
 const paused = ref(false)
 const saveStatus = ref<SaveStatus>('idle')
 const saveMessage = ref('')
 
 store.start(mode)
+skins.limpiarNuevas()
 
 // Celular o ventana estrecha: HUD en una fila, píldora de puesto en vez del panel y feed abajo
 const compactQuery = window.matchMedia('(pointer: coarse), (max-width: 767px)')
@@ -52,6 +56,8 @@ const playersText = computed(() => {
   return `${n} ${n === 1 ? 'jugador' : 'jugadores'}`
 })
 const feedItems = computed(() => (compact.value ? store.feed.slice(0, 2) : store.feed))
+// Skins desbloqueadas en esta partida: se vuelven a mostrar en el Game Over con "Usarla"
+const nuevasSkins = computed(() => skins.nuevas.flatMap((id) => buscarSkin(id) ?? []))
 
 // Top 5 desplegable desde la píldora: se cierra al tocar otra vez o a los 3 segundos
 const showTop = ref(false)
@@ -116,6 +122,7 @@ const round = ref(0)
 function playAgain() {
   enterGameScreen()
   store.start(mode)
+  skins.limpiarNuevas()
   paused.value = false
   saveStatus.value = 'idle'
   round.value++
@@ -134,6 +141,7 @@ const onScore = (hud: ScorePayload) => {
   store.score = hud.score
   store.length = hud.length
   store.botsKilled = hud.botsKilled
+  skins.comprobar(hud.score)
 }
 const onLeaderboard = (rows: LeaderboardRow[]) => (store.leaderboard = rows)
 const onFeed = (f: FeedPayload) => store.pushFeed(f.text, f.mine)
@@ -235,7 +243,14 @@ onBeforeUnmount(() => {
     <div class="escenario">
       <GameCanvas :key="round" :mode="mode" />
 
-      <TransitionGroup tag="ul" name="feed" class="feed" :class="{ abajo: compact }" aria-live="polite">
+      <!-- Arriba al centro: aviso de skin nueva y, en PC, los mensajes de la partida -->
+      <div class="arriba" :class="{ 'bajo-pildora': conRivales && compact && !landscapeTouch }">
+        <AvisoSkin />
+        <TransitionGroup v-if="!compact" tag="ul" name="feed" class="feed" aria-live="polite">
+          <li v-for="f in feedItems" :key="f.id" :class="{ mio: f.mine }">{{ f.text }}</li>
+        </TransitionGroup>
+      </div>
+      <TransitionGroup v-if="compact" tag="ul" name="feed" class="feed abajo" aria-live="polite">
         <li v-for="f in feedItems" :key="f.id" :class="{ mio: f.mine }">{{ f.text }}</li>
       </TransitionGroup>
 
@@ -286,6 +301,14 @@ onBeforeUnmount(() => {
           <p class="puntos">{{ store.gameOver.score }}</p>
           <p v-if="store.newRecord" class="record">¡Nuevo récord!</p>
           <p v-else class="suave">Tu récord: {{ store.bestScore }}</p>
+          <div v-if="nuevasSkins.length" class="skins-nuevas">
+            <div v-for="s in nuevasSkins" :key="s.id" class="skin-nueva" :style="{ '--skin-cuerpo': s.colorCuerpo, '--skin-brillo': s.colorBrillo }">
+              <span class="punto-skin" aria-hidden="true"></span>
+              <span class="skin-nueva__texto">¡Nueva skin: <strong>{{ s.nombre }}</strong>!</span>
+              <span v-if="skins.elegida === s.id" class="en-uso">En uso</span>
+              <button v-else class="btn usar" type="button" @click="skins.elegir(s.id)">Usarla</button>
+            </div>
+          </div>
           <p v-if="saveStatus === 'guest'" class="aviso">
             <RouterLink to="/login">Inicia sesión</RouterLink> para entrar al ranking
           </p>
@@ -425,11 +448,22 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
 }
-.feed {
+.arriba {
   position: absolute;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.arriba.bajo-pildora {
+  top: 48px;
+}
+.feed {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -452,8 +486,10 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 .feed.abajo {
-  top: auto;
+  position: absolute;
   bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
   gap: 4px;
 }
 .feed.abajo li {
@@ -619,6 +655,48 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 600;
 }
+.skins-nuevas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.skin-nueva {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--skin-cuerpo);
+  background: var(--color-fondo);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--skin-brillo) 30%, transparent);
+  text-align: left;
+}
+.skin-nueva__texto {
+  flex: 1;
+  font-weight: 600;
+}
+.skin-nueva strong {
+  color: var(--skin-cuerpo);
+}
+.punto-skin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--skin-cuerpo);
+  box-shadow: 0 0 8px var(--skin-brillo);
+}
+.usar {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.en-uso {
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primario);
+}
 .aviso--error {
   border-color: var(--color-peligro);
   color: var(--color-peligro);
@@ -760,6 +838,12 @@ onBeforeUnmount(() => {
 }
 .horizontal .tarjeta .btn {
   min-height: 40px;
+}
+.horizontal .skin-nueva {
+  padding: 4px 4px 4px 12px;
+}
+.horizontal .tarjeta .usar {
+  min-height: 34px;
 }
 /* Aviso para girar el celular: cubre todo y la partida queda en pausa */
 .girar {

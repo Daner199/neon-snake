@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { MODOS } from '../data'
 import type { GameOverStats, LeaderboardRow, SnakeDiedPayload } from '../events/names'
 
 export interface FeedItem {
@@ -11,10 +12,15 @@ const bestKey = (mode: string) => `neon-snake-record-${mode}`
 
 function readBest(mode: string): number {
   try {
-    return Number(localStorage.getItem(bestKey(mode)) ?? 0)
+    return Number(localStorage.getItem(bestKey(mode)) ?? 0) || 0
   } catch {
     return 0
   }
+}
+
+// El mayor de los récords de todos los modos (para saber cuánto falta para cada skin)
+export function leerRecordGlobal(): number {
+  return Math.max(0, ...MODOS.map((m) => readBest(m.id)))
 }
 
 let feedId = 0
@@ -27,6 +33,7 @@ export const useGameStore = defineStore('game', {
     length: 4,
     botsKilled: 0,
     bestScore: 0,
+    recordGlobal: leerRecordGlobal(),
     leaderboard: [] as LeaderboardRow[],
     feed: [] as FeedItem[],
     gameOver: null as GameOverStats | null,
@@ -56,6 +63,7 @@ export const useGameStore = defineStore('game', {
       if (stats.score > this.bestScore) {
         this.newRecord = true
         this.bestScore = stats.score
+        this.recordGlobal = Math.max(this.recordGlobal, stats.score)
         try {
           localStorage.setItem(bestKey(this.mode), String(stats.score))
         } catch {
