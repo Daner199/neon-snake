@@ -3,10 +3,9 @@ export const CELL = 20 // tamaño de cada celda en píxeles
 export const COLS = 64
 export const ROWS = 40
 
-export const START_STEP_MS = 110 // tiempo entre movimientos (más bajo = más rápido)
-export const MIN_STEP_MS = 60
-export const FOOD_COUNT = { arena: 45, classic: 1 } as const
-export const BOT_COUNT = 7
+// Lo que cambia por modo (comida, jugadores, velocidad) está en src/data/modos.json
+export const SPEEDUP_MS = 8 // cuánto se acorta el paso cada "aceleraCadaFrutas" frutas
+export const GOLDEN_CHANCE = 0.06 // probabilidad de que una comida sea dorada (solo con rivales)
 export const BOT_RESPAWN_MS = 2500
 export const BOT_FLOOD_LIMIT = 150 // celdas que mira un bot para no meterse en callejones
 
@@ -33,5 +32,3 @@ export const COLORS = {
   grid: 0x39ff14,
   bots: [0x3db8ff, 0xb36bff, 0xff9f43, 0x00e5d4, 0xffe15a, 0xff6b6b, 0x7c9cff, 0xf78fff],
 } as const
-
-export type GameMode = 'arena' | 'classic'

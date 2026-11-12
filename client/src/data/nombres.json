@@ -1,0 +1,9 @@
+{
+  "bases": [
+    "VíboraX", "Serpentina", "Cobra", "Pitón", "Anaconda", "NeonKing", "luzverde", "m4ria", "ZigZag",
+    "TheBoa", "sofi", "juanito", "Mamba", "krt", "pixelpro", "Culebra", "Kaiser", "nova", "Tito",
+    "Rayo", "Sombra", "Glitch", "Lobo", "Xime", "Diego", "Vale", "Toxic", "Byte", "Coral", "Escamas"
+  ],
+  "sufijos": ["", "", "_77", "99", "XD", "_pe", "_mx", "2010", "_ar", "_pro", "7", "_snk", "23"],
+  "paises": ["PE", "MX", "AR", "CO", "CL", "ES", "EC", "BO", "VE", "UY"]
+}

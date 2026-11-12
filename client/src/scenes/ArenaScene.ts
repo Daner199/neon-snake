@@ -1,21 +1,19 @@
 import Phaser from 'phaser'
 import { cellIndex, inside, nextIsSafe, think, type Grid } from '../game/bots/BotBrain'
+import { buscarModo, MODOS, type Modo } from '../data'
 import {
-  BOT_COUNT,
   BOT_RESPAWN_MS,
   CELL,
   COLORS,
   COLS,
-  FOOD_COUNT,
+  GOLDEN_CHANCE,
   MAX_ZOOM,
   MIN_CELL_PX,
   MINIMAP,
-  MIN_STEP_MS,
   POINTS,
   ROWS,
-  START_STEP_MS,
+  SPEEDUP_MS,
   TARGET_CELL_PX,
-  type GameMode,
 } from '../game/constants'
 import { randomTag } from '../game/names'
 import { SpritePool } from '../game/SpritePool'
@@ -42,10 +40,11 @@ const SAMPLE_GAP = CELL * 0.3 // distancia entre los círculos que forman el cue
 const HEAD_RADIUS = CELL * 0.46
 const TAIL_RADIUS = CELL * 0.2
 
-// Escena principal: sirve para los dos modos.
-// Arena: el jugador y varios bots con IA. Clásico: el jugador solo, cada 5 frutas va más rápido.
+// Escena principal: sirve para todos los modos de src/data/modos.json.
+// Del modo lee cuánta comida hay, cuántos rivales con IA y la velocidad.
 export class ArenaScene extends Phaser.Scene {
-  private mode: GameMode = 'arena'
+  private modo: Modo = MODOS[0]
+  private rivals = true // hay jugadores con IA: nombres, ranking en vivo y comida dorada
   private player!: Snake
   private bots: Snake[] = []
   private foods: Food[] = []
@@ -64,7 +63,7 @@ export class ArenaScene extends Phaser.Scene {
   private labels = new Map<number, Phaser.GameObjects.Text>()
   private burst!: Phaser.GameObjects.Particles.ParticleEmitter
   private elapsed = 0
-  private stepMs = START_STEP_MS
+  private stepMs = 0
   private paused = false
   private over = false
   private startedAt = 0
@@ -76,12 +75,13 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   create() {
-    this.mode = this.registry.get('mode') === 'classic' ? 'classic' : 'arena'
+    this.modo = buscarModo(this.registry.get('mode')) ?? MODOS[0]
+    this.rivals = this.modo.jugadores > 0
     this.bots = []
     this.foods = []
     this.labels.clear()
     this.elapsed = 0
-    this.stepMs = START_STEP_MS
+    this.stepMs = this.modo.pasoInicialMs
     this.paused = false
     this.over = false
     this.startedAt = this.time.now
@@ -98,9 +98,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.player = new Snake({ name: 'Tú', country: '', level: 1 }, COLORS.player, { x: 30, y: 20 }, DIRS.right, 4, true)
 
-    if (this.mode === 'arena') {
-      for (let i = 0; i < BOT_COUNT; i++) this.spawnBot(false)
-    }
+    for (let i = 0; i < this.modo.jugadores; i++) this.spawnBot(false)
     this.fillFood()
     this.follow = this.add.zone(this.player.head.x * CELL + CELL / 2, this.player.head.y * CELL + CELL / 2, 1, 1)
     this.minimap = null
@@ -209,8 +207,9 @@ export class ArenaScene extends Phaser.Scene {
     s.score += food.golden ? POINTS.goldenFood : POINTS.food
     s.foodsEaten++
     if (s.isPlayer) EventBus.emit(EVENTS.FOOD_EATEN, food.golden)
-    if (s.isPlayer && this.mode === 'classic' && s.foodsEaten % 5 === 0) {
-      this.stepMs = Math.max(MIN_STEP_MS, this.stepMs - 8)
+    const every = this.modo.aceleraCadaFrutas
+    if (s.isPlayer && every > 0 && s.foodsEaten % every === 0) {
+      this.stepMs = Math.max(this.modo.pasoMinimoMs, this.stepMs - SPEEDUP_MS)
     }
   }
 
@@ -258,7 +257,7 @@ export class ArenaScene extends Phaser.Scene {
     EventBus.emit(EVENTS.PLAYER_DIED)
     const ranking = this.rankingRows()
     const stats: GameOverStats = {
-      mode: this.mode,
+      mode: this.modo.id,
       score: this.player.score,
       length: this.player.length,
       botsKilled: this.player.kills,
@@ -308,7 +307,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private fillFood() {
-    const target = FOOD_COUNT[this.mode]
+    const target = this.modo.comida
     let normal = this.foods.reduce((n, f) => (f.golden ? n : n + 1), 0)
     if (normal >= target) return
     const grid = this.buildGrid([this.player, ...this.bots].filter((s) => s.alive))
@@ -318,7 +317,7 @@ export class ArenaScene extends Phaser.Scene {
       const c = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) }
       const i = cellIndex(c)
       if (grid[i] !== 0 || taken.has(i)) continue
-      const golden = this.mode === 'arena' && Math.random() < 0.06
+      const golden = this.rivals && Math.random() < GOLDEN_CHANCE
       this.foods.push({ ...c, golden })
       taken.add(i)
       if (!golden) normal++
@@ -483,7 +482,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (s.isPlayer) this.follow.setPosition(hx, hy)
-    if (this.mode === 'arena') this.labelFor(s).setPosition(hx, hy - CELL * 0.7)
+    if (this.rivals) this.labelFor(s).setPosition(hx, hy - CELL * 0.7)
   }
 
   // Si las celdas se ven muy pequeñas (celular en horizontal), la cámara se acerca y sigue al jugador
@@ -635,6 +634,6 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private emitLeaderboard() {
-    if (this.mode === 'arena') EventBus.emit(EVENTS.LEADERBOARD, this.rankingRows())
+    if (this.rivals) EventBus.emit(EVENTS.LEADERBOARD, this.rankingRows())
   }
 }

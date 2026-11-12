@@ -1,0 +1,22 @@
+[
+  {
+    "id": "arena",
+    "nombre": "Arena",
+    "descripcion": "Muchos jugadores en un mapa grande. Haz que choquen contra tu cuerpo para eliminarlos y quedarte con su comida.",
+    "comida": 45,
+    "jugadores": 7,
+    "pasoInicialMs": 110,
+    "pasoMinimoMs": 60,
+    "aceleraCadaFrutas": 0
+  },
+  {
+    "id": "classic",
+    "nombre": "Clásico",
+    "descripcion": "Tú solo en un tablero cerrado. Cada 5 frutas vas más rápido.",
+    "comida": 1,
+    "jugadores": 0,
+    "pasoInicialMs": 110,
+    "pasoMinimoMs": 60,
+    "aceleraCadaFrutas": 5
+  }
+]

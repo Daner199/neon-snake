@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { MODOS } from '../data'
 import { enterGameScreen } from '../screen'
 </script>
 
@@ -9,13 +10,10 @@ import { enterGameScreen } from '../screen'
       <h1 class="titulo">ELIGE UN MODO</h1>
     </header>
     <div class="modos">
-      <RouterLink class="modo" to="/jugar/arena" @click="enterGameScreen">
-        <h2>Arena</h2>
-        <p>Muchos jugadores en un mapa grande. Haz que choquen contra tu cuerpo para eliminarlos y quedarte con su comida.</p>
-      </RouterLink>
-      <RouterLink class="modo" to="/jugar/classic" @click="enterGameScreen">
-        <h2>Clásico</h2>
-        <p>Tú solo en un tablero cerrado. Cada 5 frutas vas más rápido.</p>
+      <!-- Una tarjeta por modo de src/data/modos.json -->
+      <RouterLink v-for="m in MODOS" :key="m.id" class="modo" :to="`/jugar/${m.id}`" @click="enterGameScreen">
+        <h2>{{ m.nombre }}</h2>
+        <p>{{ m.descripcion }}</p>
       </RouterLink>
     </div>
   </main>

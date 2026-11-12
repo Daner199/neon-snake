@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, ApiError } from '../api'
+import { buscarModo, MODOS } from '../data'
 import GameCanvas from '../components/GameCanvas.vue'
 import { EventBus, EVENTS } from '../events/EventBus'
 import type { Direction, FeedPayload, GameOverStats, LeaderboardRow, ScorePayload } from '../events/names'
@@ -14,7 +15,10 @@ import { useSettingsStore } from '../stores/settings'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
 
 const route = useRoute()
-const mode = route.params.modo === 'classic' ? 'classic' : 'arena'
+// El router ya comprobó que el modo existe en src/data/modos.json
+const modo = buscarModo(route.params.modo) ?? MODOS[0]
+const mode = modo.id
+const conRivales = modo.jugadores > 0
 const store = useGameStore()
 const auth = useAuthStore()
 const settings = useSettingsStore()
@@ -194,13 +198,13 @@ onBeforeUnmount(() => {
     <header class="hud">
       <div class="marcador">
         <div><span>PUNTOS</span><strong>{{ store.score }}</strong></div>
-        <template v-if="mode === 'arena'">
+        <template v-if="conRivales">
           <div><span>ELIMINADOS</span><strong class="rosa">{{ store.botsKilled }}</strong></div>
           <div><span>SERPIENTES</span><strong class="blanco">{{ store.leaderboard.length }}</strong></div>
           <div v-if="compact"><span>PUESTO</span><strong class="oro">{{ playerRank }}</strong></div>
         </template>
         <div v-else><span>TAMAÑO</span><strong class="blanco">{{ store.length }}</strong></div>
-        <div v-if="!compact || mode === 'classic'"><span>RÉCORD</span><strong class="oro">{{ store.bestScore }}</strong></div>
+        <div v-if="!compact || !conRivales"><span>RÉCORD</span><strong class="oro">{{ store.bestScore }}</strong></div>
       </div>
       <div class="acciones">
         <button
@@ -227,7 +231,7 @@ onBeforeUnmount(() => {
         <li v-for="f in feedItems" :key="f.id" :class="{ mio: f.mine }">{{ f.text }}</li>
       </TransitionGroup>
 
-      <div v-if="mode === 'arena' && compact" class="puesto">
+      <div v-if="conRivales && compact" class="puesto">
         <button class="pildora" type="button" :aria-expanded="showTop" @click="toggleTop">
           Puesto {{ playerRank }} de {{ store.leaderboard.length }}
         </button>
@@ -241,7 +245,7 @@ onBeforeUnmount(() => {
         </ol>
       </div>
 
-      <aside v-if="mode === 'arena' && !compact" class="ranking" aria-label="Ranking de la arena">
+      <aside v-if="conRivales && !compact" class="ranking" aria-label="Ranking de la arena">
         <h2>EN ESTA ARENA <span class="cuantos">· {{ playersText }}</span></h2>
         <ol>
           <li v-for="(r, i) in store.leaderboard.slice(0, 8)" :key="r.id" :class="{ yo: r.isPlayer }">
@@ -282,9 +286,9 @@ onBeforeUnmount(() => {
           </p>
           <div class="stats">
             <div><strong>{{ store.gameOver.length }}</strong><span>Tamaño final</span></div>
-            <div v-if="mode === 'arena'"><strong class="rosa">{{ store.gameOver.botsKilled }}</strong><span>Jugadores eliminados</span></div>
+            <div v-if="conRivales"><strong class="rosa">{{ store.gameOver.botsKilled }}</strong><span>Jugadores eliminados</span></div>
             <div><strong>{{ formatTime(store.gameOver.durationMs) }}</strong><span>Tiempo</span></div>
-            <div v-if="mode === 'arena'"><strong>{{ store.gameOver.rank }}.º / {{ store.gameOver.players }}</strong><span>En la arena</span></div>
+            <div v-if="conRivales"><strong>{{ store.gameOver.rank }}.º / {{ store.gameOver.players }}</strong><span>En la arena</span></div>
           </div>
           <button class="btn btn--primario grande" type="button" @click="playAgain">Jugar otra vez</button>
           <div class="fila">

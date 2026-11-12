@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
+import { MODOS } from '../data'
 import { useAuthStore } from '../stores/auth'
-
-type Mode = 'arena' | 'classic'
 
 interface RankingRow {
   position: number
@@ -12,13 +11,13 @@ interface RankingRow {
   botsKilled: number
 }
 
-const TABS: { mode: Mode; label: string }[] = [
-  { mode: 'arena', label: 'Arena' },
-  { mode: 'classic', label: 'Clásico' },
-]
+// Una pestaña por modo de src/data/modos.json
+const TABS = MODOS.map((m) => ({ mode: m.id, label: m.nombre, rivals: m.jugadores > 0 }))
 
 const auth = useAuthStore()
-const mode = ref<Mode>('arena')
+const mode = ref(TABS[0].mode)
+// Los modos con rivales muestran la columna de eliminados
+const rivals = computed(() => TABS.find((t) => t.mode === mode.value)?.rivals ?? false)
 const top = ref<RankingRow[]>([])
 const me = ref<RankingRow | null>(null)
 const loading = ref(true)
@@ -77,7 +76,7 @@ watch(mode, load, { immediate: true })
       <div class="fila cabeza">
         <span>PUESTO</span>
         <span>JUGADOR</span>
-        <span v-if="mode === 'arena'" class="bots">ELIMINADOS</span>
+        <span v-if="rivals" class="bots">ELIMINADOS</span>
         <span class="pts">PUNTOS</span>
       </div>
 
@@ -94,13 +93,13 @@ watch(mode, load, { immediate: true })
         >
           <span class="puesto">{{ r.position }}</span>
           <span class="nombre">{{ me?.position === r.position ? `Tú · ${r.username}` : r.username }}</span>
-          <span v-if="mode === 'arena'" class="bots">{{ r.botsKilled }}</span>
+          <span v-if="rivals" class="bots">{{ r.botsKilled }}</span>
           <span class="pts">{{ formatPoints(r.score) }}</span>
         </div>
         <div v-if="meOutside" class="fila yo aparte">
           <span class="puesto">{{ meOutside.position }}</span>
           <span class="nombre">Tú · {{ meOutside.username }}</span>
-          <span v-if="mode === 'arena'" class="bots">{{ meOutside.botsKilled }}</span>
+          <span v-if="rivals" class="bots">{{ meOutside.botsKilled }}</span>
           <span class="pts">{{ formatPoints(meOutside.score) }}</span>
         </div>
       </template>

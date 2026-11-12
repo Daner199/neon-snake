@@ -1,11 +1,8 @@
-// Nombres de jugador para los bots, al estilo de un juego en línea
-const BASES = [
-  'VíboraX', 'Serpentina', 'Cobra', 'Pitón', 'Anaconda', 'NeonKing', 'luzverde', 'm4ria', 'ZigZag',
-  'TheBoa', 'sofi', 'juanito', 'Mamba', 'krt', 'pixelpro', 'Culebra', 'Kaiser', 'nova', 'Tito',
-  'Rayo', 'Sombra', 'Glitch', 'Lobo', 'Xime', 'Diego', 'Vale', 'Toxic', 'Byte', 'Coral', 'Escamas',
-]
-const SUFFIXES = ['', '', '_77', '99', 'XD', '_pe', '_mx', '2010', '_ar', '_pro', '7', '_snk', '23']
-const COUNTRIES = ['PE', 'MX', 'AR', 'CO', 'CL', 'ES', 'EC', 'BO', 'VE', 'UY']
+// Nombres de jugador para los bots, al estilo de un juego en línea.
+// Las piezas (bases, sufijos y países) están en src/data/nombres.json
+import { NOMBRES } from '../data'
+
+const pick = <T>(list: T[]): T => list[Math.floor(Math.random() * list.length)]
 
 export interface PlayerTag {
   name: string
@@ -15,16 +12,14 @@ export interface PlayerTag {
 
 export function randomTag(taken: Set<string>): PlayerTag {
   for (let i = 0; i < 50; i++) {
-    const base = BASES[Math.floor(Math.random() * BASES.length)]
-    const suffix = SUFFIXES[Math.floor(Math.random() * SUFFIXES.length)]
-    const name = base + suffix
+    const name = pick(NOMBRES.bases) + pick(NOMBRES.sufijos)
     if (!taken.has(name)) {
       return {
         name,
-        country: COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)],
+        country: pick(NOMBRES.paises),
         level: 1 + Math.floor(Math.random() * 40),
       }
     }
   }
-  return { name: 'Jugador' + Math.floor(Math.random() * 1000), country: 'PE', level: 1 }
+  return { name: 'Jugador' + Math.floor(Math.random() * 1000), country: pick(NOMBRES.paises), level: 1 }
 }

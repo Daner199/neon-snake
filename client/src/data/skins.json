@@ -1,0 +1,62 @@
+[
+  {
+    "id": "neon",
+    "nombre": "Neón",
+    "descripcion": "La clásica. Verde que brilla.",
+    "colorCabeza": "#7dff5a",
+    "colorCuerpo": "#39ff14",
+    "colorFranja": "#22b80c",
+    "colorBrillo": "#39ff14",
+    "puntajeRequerido": 0
+  },
+  {
+    "id": "hielo",
+    "nombre": "Hielo",
+    "descripcion": "Azul helado que corta el aire.",
+    "colorCabeza": "#b8f3ff",
+    "colorCuerpo": "#3ddcff",
+    "colorFranja": "#1c8fb8",
+    "colorBrillo": "#3ddcff",
+    "puntajeRequerido": 100
+  },
+  {
+    "id": "magenta",
+    "nombre": "Magenta",
+    "descripcion": "Rosa eléctrico de letrero nocturno.",
+    "colorCabeza": "#ff9be0",
+    "colorCuerpo": "#ff2ec4",
+    "colorFranja": "#b3128a",
+    "colorBrillo": "#ff2ec4",
+    "puntajeRequerido": 250
+  },
+  {
+    "id": "fuego",
+    "nombre": "Fuego",
+    "descripcion": "Naranja y rojo, como brasas encendidas.",
+    "colorCabeza": "#ffd36b",
+    "colorCuerpo": "#ff6a1a",
+    "colorFranja": "#c4300c",
+    "colorBrillo": "#ff4d1a",
+    "puntajeRequerido": 500
+  },
+  {
+    "id": "oro",
+    "nombre": "Oro",
+    "descripcion": "Solo para quienes llegan a mil puntos.",
+    "colorCabeza": "#fff1a8",
+    "colorCuerpo": "#ffc83d",
+    "colorFranja": "#c48a0c",
+    "colorBrillo": "#ffd84d",
+    "puntajeRequerido": 1000
+  },
+  {
+    "id": "fantasma",
+    "nombre": "Fantasma",
+    "descripcion": "Pálida y morada. Casi no se ve venir.",
+    "colorCabeza": "#ffffff",
+    "colorCuerpo": "#c9d4ff",
+    "colorFranja": "#7d88b8",
+    "colorBrillo": "#a98bff",
+    "puntajeRequerido": 2000
+  }
+]
