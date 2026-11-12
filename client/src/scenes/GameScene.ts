@@ -23,10 +23,11 @@ import { randomTag } from '../game/names'
 import { SpritePool } from '../game/SpritePool'
 import { DIRS, Snake, type Cell } from '../game/Snake'
 import { EventBus } from '../events/EventBus'
-import { EVENTS, type Direction, type GameOverStats, type LeaderboardRow } from '../events/names'
+import { EVENTS, type CausaMuerte, type Direction, type GameOverStats, type LeaderboardRow } from '../events/names'
 import type { GameOverData } from './GameOverScene'
 
 type Food = Cell & { golden: boolean }
+type Death = { killer: Snake | null; causa: CausaMuerte } // killer: la otra serpiente, si la hubo
 
 const hex = (n: number) => '#' + n.toString(16).padStart(6, '0')
 
@@ -163,23 +164,23 @@ export class GameScene extends Phaser.Scene {
 
     // 3. Choques contra paredes, cuerpos y cabezas
     const bodies = this.buildGrid(all)
-    const deaths = new Map<Snake, Snake | null>() // víctima -> quién la mató
+    const deaths = new Map<Snake, Death>() // víctima -> quién la mató y por qué
     for (const s of all) {
       const h = heads.get(s)!
       if (!inside(h)) {
-        deaths.set(s, null)
+        deaths.set(s, { killer: null, causa: 'pared' })
         continue
       }
       const owner = bodies[cellIndex(h)]
       if (owner !== 0) {
         const other = all.find((o) => o.id === owner) ?? null
-        deaths.set(s, other && other !== s ? other : null)
+        deaths.set(s, other && other !== s ? { killer: other, causa: 'jugador' } : { killer: null, causa: 'cuerpo' })
         continue
       }
       for (const o of all) {
         if (o === s) continue
         const oh = heads.get(o)!
-        if (oh.x === h.x && oh.y === h.y && o.length >= s.length) deaths.set(s, o)
+        if (oh.x === h.x && oh.y === h.y && o.length >= s.length) deaths.set(s, { killer: o, causa: 'jugador' })
       }
     }
 
@@ -193,10 +194,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 5. Eliminaciones: quien muere no avanzó, así que recupera su cola (si no, perdería un segmento)
-    for (const [victim, killer] of deaths) {
+    for (const [victim, death] of deaths) {
       const tail = tails.get(victim)
       if (tail) victim.cells.unshift(tail)
-      this.kill(victim, killer)
+      this.kill(victim, death)
     }
 
     this.fillFood()
@@ -206,17 +207,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private eat(s: Snake, food: Food) {
+    const puntos = food.golden ? POINTS.goldenFood : POINTS.food
     s.grow += food.golden ? 3 : 1
-    s.score += food.golden ? POINTS.goldenFood : POINTS.food
+    s.score += puntos
     s.foodsEaten++
-    if (s.isPlayer) EventBus.emit(EVENTS.FOOD_EATEN, food.golden)
+    if (s.isPlayer) EventBus.emit(EVENTS.FOOD_EATEN, { puntos, dorada: food.golden, total: s.score })
     const every = this.modo.aceleraCadaFrutas
     if (s.isPlayer && every > 0 && s.foodsEaten % every === 0) {
       this.stepMs = Math.max(this.modo.pasoMinimoMs, this.stepMs - SPEEDUP_MS)
     }
   }
 
-  private kill(victim: Snake, killer: Snake | null) {
+  private kill(victim: Snake, death: Death) {
+    const killer = death.killer
     victim.alive = false
     // El jugador explota en GameOverScene (esta escena se pausa y sus partículas se quedarían quietas)
     if (!victim.isPlayer) explodeBody(this.burst, victim.cells, victim.color)
@@ -228,7 +231,7 @@ export class GameScene extends Phaser.Scene {
 
     if (victim.isPlayer) {
       this.feed(killer ? `${killer.tag.name} te eliminó` : 'Chocaste')
-      this.gameOver(killer)
+      this.gameOver(death)
       return
     }
 
@@ -256,9 +259,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   // El jugador murió: la escena se detiene y GameOverScene hace el efecto final y avisa a Vue
-  private gameOver(killer: Snake | null) {
+  private gameOver({ killer, causa }: Death) {
     this.over = true
-    EventBus.emit(EVENTS.PLAYER_DIED)
+    const { score: puntos, length: tamano } = this.player
+    EventBus.emit(
+      EVENTS.SNAKE_DIED,
+      killer ? { puntos, tamano, causa: 'jugador', eliminadoPor: killer.tag.name } : { puntos, tamano, causa: causa === 'jugador' ? 'cuerpo' : causa },
+    )
     const ranking = this.rankingRows()
     const stats: GameOverStats = {
       mode: this.modo.id,

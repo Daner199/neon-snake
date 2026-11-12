@@ -8,13 +8,13 @@ export const EVENTS = {
   RENDER_LOST: 'render-lost',
   // Phaser (GameScene) -> Vue (GameView -> Pinia). ScorePayload. Cambió el puntaje, el tamaño o los eliminados
   SCORE_CHANGED: 'score-changed',
-  // Phaser (GameScene) -> Vue (GameView: sonido). FoodEatenPayload. El jugador comió
+  // Phaser (GameScene) -> Vue (GameView: sonido). FoodEatenPayload. El jugador comió: puntos de esa comida, si era dorada y total
   FOOD_EATEN: 'food-eaten',
   // Phaser (GameScene) -> Vue (GameView: sonido). Texto con el nombre del eliminado. El jugador eliminó a otro
   BOT_KILLED: 'bot-killed',
-  // Phaser (GameScene) -> Vue (GameView: sonido). Sin datos. Murió el jugador
-  PLAYER_DIED: 'player-died',
-  // Phaser (GameScene) -> Vue (GameView -> Pinia). GameOverStats. Fin de la partida con sus estadísticas
+  // Phaser (GameScene) -> Vue (GameView: sonido y Pinia). SnakeDiedPayload. Murió el jugador: puntos, tamaño y causa
+  SNAKE_DIED: 'snake-died',
+  // Phaser (GameOverScene) -> Vue (GameView -> Pinia). GameOverStats. Fin de la partida con sus estadísticas
   GAME_OVER: 'game-over',
   // Phaser (GameScene) -> Vue (GameView -> Pinia). LeaderboardRow[]. Ranking en vivo de la partida
   LEADERBOARD: 'leaderboard',
@@ -37,6 +37,20 @@ export interface ScorePayload {
   length: number
   botsKilled: number
 }
+
+export interface FoodEatenPayload {
+  puntos: number // lo que dio esa comida
+  dorada: boolean
+  total: number // puntaje nuevo del jugador
+}
+
+// Por qué murió el jugador: contra el borde, contra su propio cuerpo o contra otro jugador
+export type CausaMuerte = 'pared' | 'cuerpo' | 'jugador'
+
+export type SnakeDiedPayload = { puntos: number; tamano: number } & (
+  | { causa: 'pared' | 'cuerpo' }
+  | { causa: 'jugador'; eliminadoPor: string }
+)
 
 export interface FeedPayload {
   text: string
@@ -70,9 +84,9 @@ export interface EventPayloads {
   [EVENTS.SCENE_READY]: void
   [EVENTS.RENDER_LOST]: void
   [EVENTS.SCORE_CHANGED]: ScorePayload
-  [EVENTS.FOOD_EATEN]: boolean
+  [EVENTS.FOOD_EATEN]: FoodEatenPayload
   [EVENTS.BOT_KILLED]: string
-  [EVENTS.PLAYER_DIED]: void
+  [EVENTS.SNAKE_DIED]: SnakeDiedPayload
   [EVENTS.GAME_OVER]: GameOverStats
   [EVENTS.LEADERBOARD]: LeaderboardRow[]
   [EVENTS.FEED]: FeedPayload

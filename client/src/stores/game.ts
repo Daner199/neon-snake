@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { GameOverStats, LeaderboardRow } from '../events/names'
+import type { GameOverStats, LeaderboardRow, SnakeDiedPayload } from '../events/names'
 
 export interface FeedItem {
   id: number
@@ -30,6 +30,7 @@ export const useGameStore = defineStore('game', {
     leaderboard: [] as LeaderboardRow[],
     feed: [] as FeedItem[],
     gameOver: null as GameOverStats | null,
+    muerte: null as SnakeDiedPayload | null, // por qué murió el jugador (texto del Game Over)
     newRecord: false,
   }),
   actions: {
@@ -41,6 +42,7 @@ export const useGameStore = defineStore('game', {
       this.leaderboard = []
       this.feed = []
       this.gameOver = null
+      this.muerte = null
       this.newRecord = false
       this.bestScore = readBest(mode)
     },

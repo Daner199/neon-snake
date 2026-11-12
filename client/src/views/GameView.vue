@@ -5,7 +5,7 @@ import { api, ApiError } from '../api'
 import { buscarModo, MODOS } from '../data'
 import GameCanvas from '../components/GameCanvas.vue'
 import { EventBus, EVENTS } from '../events/EventBus'
-import type { Direction, FeedPayload, GameOverStats, LeaderboardRow, ScorePayload } from '../events/names'
+import type { Direction, FeedPayload, FoodEatenPayload, GameOverStats, LeaderboardRow, ScorePayload, SnakeDiedPayload } from '../events/names'
 import { enterGameScreen, leaveGameScreen } from '../screen'
 import { sounds } from '../sound'
 import { useAuthStore } from '../stores/auth'
@@ -154,9 +154,17 @@ const onKey = (e: KeyboardEvent) => {
 const ifSound = (fn: () => void) => () => {
   if (!settings.muted) fn()
 }
-const onFoodEaten = (golden: boolean) => ifSound(golden ? sounds.golden : sounds.eat)()
+const onFoodEaten = (e: FoodEatenPayload) => ifSound(e.dorada ? sounds.golden : sounds.eat)()
 const onBotKilled = ifSound(sounds.kill)
-const onPlayerDied = ifSound(sounds.die)
+const onSnakeDied = (e: SnakeDiedPayload) => {
+  store.muerte = e
+  ifSound(sounds.die)()
+}
+const motivo = computed(() => {
+  const m = store.muerte
+  if (m?.causa === 'jugador') return `Te eliminó ${m.eliminadoPor}`
+  return m?.causa === 'cuerpo' ? 'Chocaste contra tu cuerpo' : 'Chocaste contra el borde'
+})
 
 if (mustRotate.value) paused.value = true
 
@@ -168,7 +176,7 @@ onMounted(() => {
   EventBus.on(EVENTS.GAME_OVER, onGameOver)
   EventBus.on(EVENTS.FOOD_EATEN, onFoodEaten)
   EventBus.on(EVENTS.BOT_KILLED, onBotKilled)
-  EventBus.on(EVENTS.PLAYER_DIED, onPlayerDied)
+  EventBus.on(EVENTS.SNAKE_DIED, onSnakeDied)
   window.addEventListener('keydown', onKey)
   compactQuery.addEventListener('change', updateCompact)
   touchQuery.addEventListener('change', updateOrientation)
@@ -184,7 +192,7 @@ onBeforeUnmount(() => {
   EventBus.off(EVENTS.GAME_OVER, onGameOver)
   EventBus.off(EVENTS.FOOD_EATEN, onFoodEaten)
   EventBus.off(EVENTS.BOT_KILLED, onBotKilled)
-  EventBus.off(EVENTS.PLAYER_DIED, onPlayerDied)
+  EventBus.off(EVENTS.SNAKE_DIED, onSnakeDied)
   window.removeEventListener('keydown', onKey)
   compactQuery.removeEventListener('change', updateCompact)
   touchQuery.removeEventListener('change', updateOrientation)
@@ -273,7 +281,7 @@ onBeforeUnmount(() => {
         <div class="tarjeta" role="dialog" aria-labelledby="go-titulo">
           <h2 id="go-titulo" class="titulo-capa rosa">GAME OVER</h2>
           <p class="motivo">
-            {{ store.gameOver.killedBy ? `Te eliminó ${store.gameOver.killedBy}` : 'Chocaste' }}
+            {{ motivo }}
           </p>
           <p class="puntos">{{ store.gameOver.score }}</p>
           <p v-if="store.newRecord" class="record">¡Nuevo récord!</p>
