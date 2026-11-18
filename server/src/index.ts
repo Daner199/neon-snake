@@ -4,6 +4,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { rateLimit } from 'express-rate-limit'
 import helmet from 'helmet'
 import { prisma } from './db.js'
+import { attachOnline, onlineRouter } from './online/socket.js'
 import { authRouter } from './routes/auth.js'
 import { rankingRouter } from './routes/ranking.js'
 import { sessionsRouter } from './routes/sessions.js'
@@ -51,6 +52,7 @@ app.get('/api/modes', async (_req, res) => {
 app.use('/api/auth', authLimit, authRouter)
 app.use('/api/sessions', sessionsRouter)
 app.use('/api/ranking', rankingRouter)
+app.use('/api/online', onlineRouter)
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' })
@@ -70,6 +72,8 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 })
 
 const port = Number(process.env.PORT ?? 3000)
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`API de Neon Snake en http://localhost:${port}`)
 })
+// Multijugador en línea (Socket.IO) en el mismo puerto, bajo /api/socket.io
+attachOnline(server, corsOrigins)

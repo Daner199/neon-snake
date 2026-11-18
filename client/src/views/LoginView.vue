@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 type Tab = 'login' | 'register'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+
+// Si llegó aquí desde una pantalla que pide sesión (por ejemplo, En línea), vuelve a ella.
+// Solo rutas del propio juego: nada de enlaces a otras webs.
+const volver = typeof route.query.volver === 'string' && /^\/(?!\/)/.test(route.query.volver) ? route.query.volver : '/'
+const pideSesionEnLinea = volver.startsWith('/online')
 
 const tab = ref<Tab>('login')
 const username = ref('')
@@ -28,7 +34,7 @@ async function submit() {
   try {
     if (tab.value === 'login') await auth.login(username.value, password.value)
     else await auth.register(username.value, email.value, password.value)
-    router.push('/')
+    router.push(volver)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Algo salió mal, inténtalo de nuevo'
   } finally {
@@ -43,6 +49,7 @@ async function submit() {
     <form class="tarjeta" @submit.prevent="submit">
       <RouterLink class="cerrar" to="/" aria-label="Cerrar">✕</RouterLink>
       <h1>{{ title }}</h1>
+      <p v-if="pideSesionEnLinea" class="motivo-sesion">Para jugar en línea necesitas una cuenta: así tus partidas entran al ranking.</p>
 
       <div class="pestanas" role="tablist">
         <button
@@ -189,6 +196,15 @@ input {
 input:focus {
   outline: 2px solid var(--color-primario);
   outline-offset: 1px;
+}
+.motivo-sesion {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-primario);
+  color: var(--color-texto);
+  font-size: 14px;
+  text-align: center;
 }
 .error {
   margin: 4px 0 0;

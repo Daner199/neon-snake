@@ -1,4 +1,4 @@
-// Crea los dos modos de juego. Ejecutar con: npm run db:seed
+// Crea los modos de juego. Ejecutar con: npm run db:seed
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -13,6 +13,12 @@ async function main() {
     where: { code: 'classic' },
     update: {},
     create: { code: 'classic', name: 'Clásico' },
+  })
+  // Las partidas en línea las guarda el propio servidor (src/online/Room.ts)
+  await prisma.gameMode.upsert({
+    where: { code: 'online' },
+    update: {},
+    create: { code: 'online', name: 'En línea' },
   })
   console.log('Modos de juego listos')
 }

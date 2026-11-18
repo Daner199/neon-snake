@@ -2,7 +2,7 @@
 // Pantalla de juego: arma la pantalla (lienzo de Phaser, HUD, mensajes, pausa y Game Over),
 // escucha el EventBus y pasa los datos a Pinia y a los componentes. No toca nada de Phaser.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api, ApiError } from '../api'
 import AvisoSkin from '../components/AvisoSkin.vue'
 import GameCanvas from '../components/GameCanvas.vue'
@@ -20,6 +20,9 @@ import type {
   ScorePayload,
   SnakeDiedPayload,
 } from '../events/names'
+import { colorsFromSkin } from '../game/colors'
+import { NET_ERRORS } from '../online/protocol'
+import { online, reaparecer, salir, unirse } from '../online/session'
 import { enterGameScreen, leaveGameScreen } from '../screen'
 import { sounds } from '../sound'
 import { useAuthStore } from '../stores/auth'
@@ -28,15 +31,23 @@ import { useSettingsStore } from '../stores/settings'
 import { useSkinsStore } from '../stores/skins'
 
 const route = useRoute()
+const router = useRouter()
+// En línea (/online/K7Q2): el servidor mueve la partida; las reglas son las del modo Arena
+const enLinea = route.name === 'online-partida'
+const codigo = String(route.params.codigo ?? '').toUpperCase()
 // El router ya comprobó que el modo existe en src/data/modos.json
-const modo = buscarModo(route.params.modo) ?? MODOS[0]
-const mode = modo.id
-const conRivales = modo.jugadores > 0
+const modo = enLinea ? buscarModo('arena')! : (buscarModo(route.params.modo) ?? MODOS[0])
+const mode = enLinea ? 'online' : modo.id
+const conRivales = enLinea || modo.jugadores > 0
 const store = useGameStore()
 const auth = useAuthStore()
 const settings = useSettingsStore()
 const skins = useSkinsStore()
 const paused = ref(false)
+// Entrada a la sala en línea
+const conexion = ref<'conectando' | 'lista' | 'error'>(enLinea ? 'conectando' : 'lista')
+const conexionError = ref('')
+const copiado = ref(false)
 const saveStatus = ref<SaveStatus>('idle')
 const saveMessage = ref('')
 
@@ -67,8 +78,33 @@ const playersText = computed(() => {
 })
 const feedItems = computed(() => (compact.value ? store.feed.slice(0, 2) : store.feed))
 
+// En línea el servidor guarda la partida él solo; aquí se muestra cómo quedó
+const SAVE_ONLINE: Record<string, [SaveStatus, string]> = {
+  invitado: ['guest', ''],
+  guardando: ['saving', 'Guardando partida…'],
+  guardada: ['saved', 'Partida guardada'],
+  error: ['error', 'No se pudo guardar la partida'],
+  'muy-corta': ['saved', 'La partida fue muy corta para el ranking'],
+}
+watch(
+  () => [online.guardada, online.position] as const,
+  ([g, pos]) => {
+    if (!enLinea || !g || !store.gameOver) return
+    const [status, text] = SAVE_ONLINE[g]
+    saveStatus.value = status
+    saveMessage.value = g === 'guardada' && pos ? `Partida guardada · Puesto ${pos}.º en el ranking En línea` : text
+  },
+)
+
 // Guarda la partida en el servidor si hay sesión; los invitados no entran al ranking
 async function saveGame(stats: GameOverStats) {
+  if (enLinea) {
+    const g = online.guardada ?? 'guardando'
+    const [status, text] = SAVE_ONLINE[g]
+    saveStatus.value = status
+    saveMessage.value = g === 'guardada' && online.position ? `Partida guardada · Puesto ${online.position}.º en el ranking En línea` : text
+    return
+  }
   if (!auth.loggedIn) {
     saveStatus.value = 'guest'
     return
@@ -105,6 +141,10 @@ async function saveGame(stats: GameOverStats) {
 
 function pauseGame() {
   if (store.gameOver || paused.value) return
+  if (enLinea) {
+    paused.value = true // en línea no se pausa el mundo: solo se abre el menú
+    return
+  }
   paused.value = true
   EventBus.emit(EVENTS.PAUSE)
 }
@@ -112,13 +152,23 @@ function pauseGame() {
 function togglePause() {
   if (store.gameOver) return
   paused.value = !paused.value
-  EventBus.emit(paused.value ? EVENTS.PAUSE : EVENTS.RESUME)
+  if (!enLinea) EventBus.emit(paused.value ? EVENTS.PAUSE : EVENTS.RESUME)
 }
 
 // "Jugar otra vez" crea el juego de cero (como al entrar desde el menú), cambiando la key de GameCanvas.
 // Reiniciar la escena de Phaser podía dejar la partida parada en el celular al cambiar a pantalla completa.
 const round = ref(0)
-function playAgain() {
+async function playAgain() {
+  if (enLinea) {
+    // Otra serpiente en la misma sala
+    try {
+      await reaparecer()
+    } catch (e) {
+      saveStatus.value = 'error'
+      saveMessage.value = e instanceof Error ? e.message : 'No se pudo volver a entrar'
+      return
+    }
+  }
   enterGameScreen()
   store.start(mode)
   skins.limpiarNuevas()
@@ -144,7 +194,43 @@ watch(() => skins.elegida, sendSkin)
 // Al terminar create() la escena pide la skin; si arranca con la partida ya pausada (celular en vertical), se lo recuerda
 const onSceneReady = () => {
   sendSkin()
-  if (paused.value) EventBus.emit(EVENTS.PAUSE)
+  if (paused.value && !enLinea) EventBus.emit(EVENTS.PAUSE)
+}
+
+// ---------- En línea ----------
+
+async function entrarSala() {
+  conexion.value = 'conectando'
+  conexionError.value = ''
+  const { colorCabeza, colorCuerpo, colorFranja, colorBrillo } = skins.skinActual
+  const colors = colorsFromSkin({ colorCabeza, colorCuerpo, colorFranja, colorBrillo })
+  try {
+    if (!auth.token) throw new Error(NET_ERRORS.SESION)
+    await unirse(codigo, colors, auth.token)
+    conexion.value = 'lista'
+  } catch (e) {
+    // La sesión caducó: a iniciar sesión otra vez y de vuelta a esta sala
+    if (e instanceof Error && e.message === NET_ERRORS.SESION) {
+      auth.logout()
+      router.replace({ name: 'login', query: { volver: route.fullPath } })
+      return
+    }
+    conexion.value = 'error'
+    conexionError.value = e instanceof Error ? e.message : 'No se pudo entrar a la sala'
+  }
+}
+
+// Enlace para invitar: quien lo abre entra directo a esta sala
+async function copiarEnlace() {
+  const url = `${location.origin}/online/${codigo}`
+  try {
+    if (navigator.share && touch.value) await navigator.share({ title: 'Neon Snake', text: `¡Entra a mi sala ${codigo}!`, url })
+    else await navigator.clipboard.writeText(url)
+    copiado.value = true
+    setTimeout(() => (copiado.value = false), 2000)
+  } catch {
+    // el jugador canceló o el navegador no deja copiar: el código sigue a la vista
+  }
 }
 const onScore = (hud: ScorePayload) => {
   store.score = hud.score
@@ -172,12 +258,13 @@ const onSnakeDied = (e: SnakeDiedPayload) => {
 
 const onKey = (e: KeyboardEvent) => {
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause()
-  if (e.key === 'Enter' && store.gameOver) playAgain()
+  if (e.key === 'Enter' && store.gameOver) void playAgain()
 }
 
 if (mustRotate.value) paused.value = true
 
 onMounted(() => {
+  if (enLinea) entrarSala()
   EventBus.on(EVENTS.SCENE_READY, onSceneReady)
   EventBus.on(EVENTS.SCORE_CHANGED, onScore)
   EventBus.on(EVENTS.LEADERBOARD, onLeaderboard)
@@ -194,6 +281,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   leaveGameScreen()
+  if (enLinea) salir()
   EventBus.off(EVENTS.SCENE_READY, onSceneReady)
   EventBus.off(EVENTS.SCORE_CHANGED, onScore)
   EventBus.off(EVENTS.LEADERBOARD, onLeaderboard)
@@ -214,7 +302,31 @@ onBeforeUnmount(() => {
     <HudJuego :con-rivales="conRivales" :compact="compact" :paused="paused" @pausa="togglePause" />
 
     <div class="escenario">
-      <GameCanvas :key="round" :mode="mode" />
+      <GameCanvas v-if="conexion === 'lista'" :key="round" :mode="mode" :online="enLinea" />
+
+      <!-- En línea: código de la sala (para invitar), ping y estado de la conexión -->
+      <div v-if="enLinea" class="sala" :class="{ 'sala--compacta': compact }">
+        <button class="sala__codigo" type="button" :title="'Copiar enlace de la sala'" @click="copiarEnlace">
+          <span class="sala__etiqueta">SALA</span> {{ codigo }}
+          <span class="sala__copiar">{{ copiado ? '¡Copiado!' : 'Invitar' }}</span>
+        </button>
+        <span v-if="online.joined && online.connected" class="ping" :class="{ alto: online.ping > 150 }">{{ online.ping }} ms</span>
+        <span v-if="online.reconnecting" class="ping alto">Reconectando…</span>
+      </div>
+      <div v-if="conexion !== 'lista'" class="conexion" role="status">
+        <img src="/logo.svg" alt="" width="64" height="64" />
+        <template v-if="conexion === 'conectando'">
+          <p>Entrando a la sala {{ codigo }}…</p>
+          <p class="suave">Si el servidor estaba dormido, puede tardar hasta un minuto.</p>
+        </template>
+        <template v-else>
+          <p>{{ conexionError }}</p>
+          <div class="fila-botones">
+            <button class="btn btn--primario" type="button" @click="entrarSala">Reintentar</button>
+            <RouterLink class="btn" to="/online">Otras salas</RouterLink>
+          </div>
+        </template>
+      </div>
 
       <!-- Arriba al centro: aviso de skin nueva y, en PC, los mensajes de la partida -->
       <div class="arriba" :class="{ 'bajo-pildora': conRivales && compact && !landscapeTouch }">
@@ -240,7 +352,7 @@ onBeforeUnmount(() => {
         </ol>
       </aside>
 
-      <MenuPausa v-if="paused && !store.gameOver" @continuar="togglePause" />
+      <MenuPausa v-if="paused && !store.gameOver" :en-linea="enLinea" @continuar="togglePause" />
       <PantallaGameOver
         :con-rivales="conRivales"
         :save-status="saveStatus"
@@ -444,6 +556,88 @@ onBeforeUnmount(() => {
   width: 48px;
   height: 48px;
   font-size: 16px;
+}
+/* En línea: código de la sala y ping, arriba a la izquierda */
+.sala {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sala__codigo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-borde);
+  background: color-mix(in srgb, var(--color-superficie) 85%, transparent);
+  color: var(--color-primario);
+  font: 400 13px var(--fuente-titulo);
+  cursor: pointer;
+}
+.sala__etiqueta {
+  font: 600 11px var(--fuente-cuerpo);
+  letter-spacing: 1px;
+  color: var(--color-texto-suave);
+}
+.sala__copiar {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-primario);
+  color: var(--color-fondo);
+  font: 700 12px var(--fuente-cuerpo);
+}
+.ping {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-superficie) 85%, transparent);
+  border: 1px solid var(--color-borde);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primario);
+}
+.ping.alto {
+  color: var(--color-oro);
+}
+.sala--compacta {
+  top: auto;
+  bottom: 8px;
+  left: auto;
+  right: 8px;
+}
+.sala--compacta .sala__codigo {
+  font-size: 11px;
+  padding: 4px 6px 4px 10px;
+}
+.conexion {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: var(--color-fondo);
+  text-align: center;
+}
+.conexion p {
+  margin: 0;
+}
+.conexion .suave {
+  color: var(--color-texto-suave);
+  font-size: 14px;
+}
+.fila-botones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
 }
 /* Aviso para girar el celular: cubre todo y la partida queda en pausa */
 .girar {

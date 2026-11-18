@@ -2,13 +2,14 @@
 
 **Jugar:** https://neon-snake-web.onrender.com (la primera visita puede tardar hasta 1 minuto si el servidor estaba dormido)
 
-Juego de Snake para navegador con un modo **Arena con bots**: serpientes controladas por la computadora que puedes eliminar haciéndolas chocar contra tu cuerpo. También tiene modo **Clásico** y **skins** que se desbloquean con el puntaje.
+Juego de Snake para navegador con un modo **Arena con bots**: serpientes controladas por la computadora que puedes eliminar haciéndolas chocar contra tu cuerpo. También tiene modo **Clásico**, **multijugador en línea** con salas y códigos para invitar a tus amigos, y **skins** que se desbloquean con el puntaje.
 
 | Parte | Tecnología | Carpeta |
 | --- | --- | --- |
 | Interfaz | Vue 3 + Vite + TypeScript + Pinia + Vue Router | `client/` |
 | Motor del juego | Phaser 3 | `client/src/scenes/`, `client/src/game/` |
 | API | Node.js + Express 5 + TypeScript + Prisma 6 | `server/` |
+| Multijugador en línea | Socket.IO 4 (servidor autoritativo) | `server/src/online/`, `client/src/online/` |
 | Base de datos | PostgreSQL 16 (Docker) + Prisma | `docker-compose.yml`, `server/prisma/` |
 
 ## Requisitos
@@ -69,6 +70,7 @@ neon-snake/
 │   │   ├── data/              JSON del juego: skins, modos y nombres de los jugadores con IA
 │   │   ├── events/            EventBus y nombres de los eventos: el único puente Vue <-> Phaser
 │   │   ├── logic/             Reglas puras (desbloqueo de skins), con sus pruebas
+│   │   ├── online/            Conexión con las salas en línea (Socket.IO) y mensajes (protocol.ts)
 │   │   ├── api.ts             Llamadas a /api
 │   │   └── sound.ts           Efectos de sonido con Web Audio
 │   ├── Dockerfile             Compila el juego y lo sirve con nginx
@@ -77,6 +79,7 @@ neon-snake/
 │   ├── src/
 │   │   ├── index.ts           Arranque de Express, seguridad y rutas
 │   │   ├── routes/            /api/auth, /api/sessions, /api/ranking
+│   │   ├── online/            Multijugador: salas, arena simulada en el servidor y Socket.IO
 │   │   ├── middleware/        requireAuth (token JWT)
 │   │   └── services/          Tokens y ranking
 │   ├── prisma/                Tablas (schema.prisma), migraciones y datos iniciales
@@ -99,6 +102,38 @@ neon-snake/
 - Los eventos de `src/events/names.ts` son el único puente entre Vue y Phaser.
 - Los datos del juego viven en JSON (`src/data/`).
 
+## Multijugador en línea
+
+En el menú, **Jugar en línea** abre la pantalla de salas. Para jugar en línea hay que **iniciar sesión** (si no, el juego te lleva al login y luego te devuelve a la sala): así cada partida entra al ranking con tu nombre de usuario.
+
+- **Partida rápida:** entras a la sala pública con más gente (o se crea una).
+- **Crear sala:** recibes un código de 4 letras (por ejemplo `K7Q2`). Puede ser pública (sale en la lista de salas abiertas) o privada, y con o sin jugadores de la computadora que completan la sala hasta 8 serpientes.
+- **Unirse con código:** escribes el código que te pasó tu amigo. También sirve el enlace del botón **Invitar** (`https://…/online/K7Q2`), que entra directo.
+
+Cómo funciona:
+
+- **El servidor manda.** `server/src/online/Arena.ts` mueve todas las serpientes cada 110 ms, revisa los choques y reparte la comida, con las mismas reglas que el modo Arena. El navegador solo envía los giros (`girar`) y dibuja lo que recibe (`estado`). Así nadie puede hacer trampa y todos ven lo mismo.
+- **Mensajes pequeños.** Cada paso viaja como números (`client/src/online/protocol.ts`): unas 600 letras por paso con 8 serpientes. Los nombres y colores se mandan solo cuando alguien entra o sale (`roster`).
+- **Protección al aparecer.** Durante 3 segundos tu serpiente parpadea: no choca con nadie y nadie la caza.
+- **Ranking En línea.** El servidor guarda cada partida él mismo al morir (no la manda el navegador), y aparece en la pestaña *En línea* del ranking.
+- **Colores distintos.** Si dos personas usan la misma skin (por ejemplo, la verde inicial), cada una se ve a sí misma con su skin y ve a la otra de otro color.
+- **Salas.** Hasta 8 personas por sala y 50 salas por servidor. Una sala vacía se cierra al minuto. Si se corta la conexión, el juego vuelve a entrar solo a la misma sala.
+- **Mismo puerto.** Socket.IO vive en `/api/socket.io`, así pasa por el proxy de nginx (que ya deja pasar WebSocket) y el de Vite en desarrollo. No hace falta abrir otro puerto ni cambiar nada en Render o Railway.
+
+Para probarlo en tu PC con dos jugadores, abre `http://localhost:5173/online` en dos ventanas (una normal y otra de incógnito), crea una sala en una y únete con el código en la otra.
+
+## Inteligencia de los bots
+
+Los jugadores de la computadora usan `client/src/game/bots/BotBrain.ts` (el servidor usa una copia exacta, `server/src/online/shared/BotBrain.ts`; `npm test` avisa si no son iguales). En cada paso:
+
+1. Descartan las direcciones que chocan seguro.
+2. Cuentan el espacio libre que les quedaría en cada dirección (*flood fill*), sabiendo que el cuerpo de los demás se va retirando desde la cola y sin contar los huecos que otra cabeza puede cerrar antes. Si el espacio es menor que su cuerpo, es un callejón.
+3. Evitan las celdas donde una serpiente igual o más grande puede meter la cabeza.
+4. Buscan la comida por el camino real más corto (BFS, no en línea recta), prefieren la dorada y a veces intentan cortarle el paso a una serpiente cercana.
+5. Recuerdan su objetivo para no cambiar de idea en cada paso, y prefieren seguir recto: así no zigzaguean.
+
+Antes, los bots hacían giros al azar (a veces contra la pared) e iban en zigzag hacia la comida, y eso parecía un error. En una simulación de 30 partidas de 2000 pasos con 8 bots, ahora mueren unas 2,6 veces menos (745 muertes contra 1944).
+
 ## API
 
 | Método | Ruta | Qué hace |
@@ -107,7 +142,9 @@ neon-snake/
 | POST | `/api/auth/register` | Crea una cuenta (`username`, `email`, `password`) y devuelve el token |
 | POST | `/api/auth/login` | Inicia sesión (`username`, `password`) y devuelve el token |
 | POST | `/api/sessions` | Guarda una partida (requiere token) |
-| GET | `/api/ranking/:modo` | Top 10 de `arena` o `classic` (con token, también tu puesto) |
+| GET | `/api/ranking/:modo` | Top 10 de `arena`, `classic` u `online` (con token, también tu puesto) |
+| GET | `/api/online/salas` | Salas públicas con lugar libre |
+| WebSocket | `/api/socket.io` | Multijugador en línea (Socket.IO, mensajes en `protocol.ts`) |
 
 ## Comandos útiles
 
@@ -115,7 +152,7 @@ neon-snake/
 | --- | --- | --- |
 | `client/` | `npm run dev` | Juego en modo desarrollo |
 | `client/` | `npm run build` | Versión para publicar |
-| `client/` | `npm test` | Pruebas de la lógica (skins, serpiente y JSON) con Vitest |
+| `client/` | `npm test` | Pruebas de la lógica (skins, serpiente, IA de los bots y JSON) con Vitest |
 | `server/` | `npm run dev` | API con recarga automática |
 | `server/` | `npm run build` | Compila la API |
 | `server/` | `npm run db:studio` | Ver y editar las tablas en el navegador |

@@ -8,7 +8,7 @@ type GameHandle = { destroy(removeCanvas: boolean): void }
 // Si el juego no arranca en este tiempo (WebGL bloqueado, poca memoria...), se avisa y se ofrece reintentar
 const START_TIMEOUT_MS = 8000
 
-const props = defineProps<{ mode: string }>()
+const props = defineProps<{ mode: string; online?: boolean }>()
 let game: GameHandle | null = null
 let unmounted = false
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -40,7 +40,7 @@ async function start() {
     // Al reintentar, el juego anterior puede no terminar de destruirse (su bucle se paró): se quita su lienzo
     game?.destroy(true)
     document.getElementById('game-container')?.replaceChildren()
-    game = createGame('game-container', props.mode)
+    game = createGame('game-container', props.mode, props.online)
   } catch {
     failed.value = true
   }
@@ -72,7 +72,7 @@ onBeforeUnmount(() => {
         <button class="btn btn--primario" type="button" @click="start">Reintentar</button>
       </template>
       <template v-else>
-        <p>Cargando la arena…</p>
+        <p>{{ online ? 'Entrando a la sala…' : 'Cargando la arena…' }}</p>
         <span class="barra" aria-hidden="true"></span>
       </template>
     </div>
