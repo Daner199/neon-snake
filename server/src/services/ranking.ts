@@ -1,6 +1,6 @@
 import { prisma } from '../db.js'
 
-export const MODES = ['arena', 'classic'] as const
+export const MODES = ['arena', 'classic', 'online'] as const
 export type ModeCode = (typeof MODES)[number]
 
 export const isMode = (value: unknown): value is ModeCode => MODES.includes(value as ModeCode)

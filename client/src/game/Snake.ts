@@ -1,3 +1,4 @@
+import { newMemory, type BotMemory, type BotPersonality } from './bots/BotBrain'
 import type { SnakeColors } from './colors'
 import type { PlayerTag } from './names'
 
@@ -10,10 +11,7 @@ export const DIRS: Record<'up' | 'down' | 'left' | 'right', Cell> = {
   right: { x: 1, y: 0 },
 }
 
-export interface BotPersonality {
-  aggression: number // 0..1: cuánto le gusta cazar al jugador
-  mistakes: number // probabilidad de hacer un giro torpe en cada paso
-}
+export type { BotPersonality } from './bots/BotBrain'
 
 let nextId = 1
 
@@ -28,6 +26,7 @@ export class Snake {
   kills = 0
   foodsEaten = 0
   alive = true
+  ghost = false // en línea: recién aparecida, todavía no choca (se dibuja parpadeando)
   // Cola antes del último paso: sirve para dibujar el movimiento suave entre ticks (null = aún no se movió)
   prevTail: Cell | null = null
 
@@ -35,6 +34,7 @@ export class Snake {
   color: SnakeColors
   isPlayer: boolean
   personality: BotPersonality | null
+  memory: BotMemory = newMemory() // lo que recuerda un bot entre pasos (su objetivo)
 
   constructor(
     tag: PlayerTag,

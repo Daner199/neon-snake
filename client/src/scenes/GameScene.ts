@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { cellIndex, inside, nextIsSafe, think, type Grid } from '../game/bots/BotBrain'
+import { think } from '../game/bots/BotBrain'
+import { cellIndex, inside, type Grid } from '../game/grid'
 import { buscarModo, MODOS, SKINS, type Modo } from '../data'
 import { closestColor, colorsFromBase, colorsFromSkin, hex, mix } from '../game/colors'
 import {
@@ -33,6 +34,8 @@ import {
   type SkinChangedPayload,
 } from '../events/names'
 import type { GameOverData } from './GameOverScene'
+import { DIR_CELLS, type DiedStats, type DirIndex, type FeedMsg, type GameEvent, type RosterEntry, type StatePayload } from '../online/protocol'
+import { enviarSkin, getSocket, girar, online } from '../online/session'
 
 type Food = Cell & { golden: boolean }
 type Death = { killer: Snake | null; causa: CausaMuerte } // killer: la otra serpiente, si la hubo
@@ -74,23 +77,32 @@ export class GameScene extends Phaser.Scene {
   // Colores de los bots: los de COLORS.bots menos el que más se parece a la skin del jugador
   private botPalette: number[] = [...COLORS.bots]
   private tick = 0
+  // Partida en línea: el servidor mueve todo y aquí solo se dibuja lo que llega en cada paso
+  private online = false
+  private remote = new Map<number, Snake>() // id en el servidor -> serpiente que se dibuja
+  private roster = new Map<number, RosterEntry>()
+  private playerServerId = 0
 
   constructor() {
     super('GameScene')
   }
 
   create() {
+    this.online = this.registry.get('online') === true
     this.modo = buscarModo(this.registry.get('mode')) ?? MODOS[0]
-    this.rivals = this.modo.jugadores > 0
+    this.rivals = this.online || this.modo.jugadores > 0
     this.bots = []
     this.foods = []
     this.labels.clear()
     this.elapsed = 0
-    this.stepMs = this.modo.pasoInicialMs
+    this.stepMs = this.online ? online.tickMs : this.modo.pasoInicialMs
     this.paused = false
     this.over = false
     this.startedAt = this.time.now
     this.tick = 0
+    this.remote.clear()
+    this.roster.clear()
+    this.playerServerId = 0
 
     this.frozenDrawn = false
     this.add.image(0, 0, TEXTURES.grid).setOrigin(0).setDepth(0)
@@ -105,8 +117,13 @@ export class GameScene extends Phaser.Scene {
     const skin = colorsFromSkin(SKINS[0])
     this.player = new Snake({ name: 'Tú', country: '', level: 1 }, skin, { x: 30, y: 20 }, DIRS.right, 4, true)
 
-    for (let i = 0; i < this.modo.jugadores; i++) this.spawnBot(false)
-    this.fillFood()
+    if (this.online) {
+      this.player.alive = false // hasta que llegue el primer estado del servidor
+      this.setupNet()
+    } else {
+      for (let i = 0; i < this.modo.jugadores; i++) this.spawnBot(false)
+      this.fillFood()
+    }
     this.follow = this.add.zone(this.player.head.x * CELL + CELL / 2, this.player.head.y * CELL + CELL / 2, 1, 1)
     this.minimap = null
     this.updateCamera()
@@ -123,6 +140,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    if (this.online) {
+      // En línea la partida no se pausa: el mundo sigue aunque abras el menú
+      this.elapsed += delta
+      this.renderSnakes(Math.min(1, this.elapsed / this.stepMs))
+      return
+    }
     const frozen = this.paused || this.over
     if (!frozen) {
       this.elapsed += delta
@@ -145,13 +168,19 @@ export class GameScene extends Phaser.Scene {
   private step() {
     const all = [this.player, ...this.bots].filter((s) => s.alive)
 
-    // 1. Los bots deciden hacia dónde ir. Para repartir el trabajo, cada uno piensa en ticks
-    //    alternos; si va a chocar con lo que tiene delante, piensa en este mismo tick.
+    // 1. Los bots deciden hacia dónde ir (src/game/bots/BotBrain.ts). Piensan en cada paso:
+    //    su búsqueda está limitada, así que es barato y no se quedan "dormidos" un tick.
     this.tick++
-    const grid = this.buildGrid(all)
+    const world = {
+      cols: COLS,
+      rows: ROWS,
+      grid: this.buildGrid(all),
+      foods: this.foods,
+      snakes: all,
+      passThroughSelf: this.modo.atraviesaCuerpo,
+    }
     for (const bot of all) {
-      if (bot.isPlayer) continue
-      if ((this.tick + bot.id) % 2 === 0 || !nextIsSafe(bot, grid)) bot.turn(think(bot, grid, this.foods, this.player))
+      if (!bot.isPlayer && bot.personality) bot.turn(think(bot, bot.personality, bot.memory, world))
     }
 
     // 2. Nuevas cabezas; la cola avanza salvo que la serpiente esté creciendo
@@ -298,9 +327,10 @@ export class GameScene extends Phaser.Scene {
     const length = 4 + Math.floor(startScore / 80)
     const spot = this.findSpawn(length)
     if (!spot) return
+    // Nivel intermedio-avanzado: todos juegan bien, unos más agresivos y otros más prudentes
     const bot = new Snake(tag, color, spot.cell, spot.dir, length, false, {
-      aggression: 0.15 + Math.random() * 0.5,
-      mistakes: 0.004 + Math.random() * 0.012,
+      aggression: 0.3 + Math.random() * 0.45,
+      skill: 0.7 + Math.random() * 0.3,
     }, startScore)
     this.bots.push(bot)
     if (announce) this.feed(`${tag.name} se unió a la arena`)
@@ -429,6 +459,8 @@ export class GameScene extends Phaser.Scene {
     }
     const total = Math.max(walked, CELL)
     const { head, body, stripe, glow } = s.color
+    // Recién aparecida en línea: parpadea mientras no choca con nadie
+    const alpha = s.ghost ? 0.35 + 0.25 * Math.sin(this.time.now / 90) : 1
 
     // Se dibuja de la cola a la cabeza para que la cabeza quede encima
     for (let j = m - 3; j >= 0; j -= 3) {
@@ -439,7 +471,7 @@ export class GameScene extends Phaser.Scene {
       let color = Math.floor(d / (CELL * 2)) % 2 === 1 ? stripe : body
       const light = Math.max(0, 1 - d / (CELL * 2.5)) * 0.4
       if (light > 0) color = mix(color, WHITE, light)
-      this.bodies.next().setPosition(samples[j], samples[j + 1]).setScale((radius * 2) / DISC).setTint(color)
+      this.bodies.next().setPosition(samples[j], samples[j + 1]).setScale((radius * 2) / DISC).setTint(color).setAlpha(alpha)
     }
 
     // Cabeza: un poco más ancha y ovalada en la dirección de avance, con ojos y brillo neón
@@ -454,6 +486,7 @@ export class GameScene extends Phaser.Scene {
       .setPosition(hx, hy)
       .setScale(dir.x !== 0 ? along : across, dir.x !== 0 ? across : along)
       .setTint(head)
+      .setAlpha(alpha)
     const px = -dir.y
     const py = dir.x
     for (const side of [1, -1]) {
@@ -507,7 +540,7 @@ export class GameScene extends Phaser.Scene {
   private labelFor(s: Snake): Phaser.GameObjects.Text {
     let label = this.labels.get(s.id)
     if (!label) {
-      const text = s.isPlayer ? 'Tú' : `${s.tag.name} · Nv.${s.tag.level}`
+      const text = s.isPlayer ? 'Tú' : s.tag.level > 0 ? `${s.tag.name} · Nv.${s.tag.level}` : s.tag.name
       label = this.add
         .text(0, 0, text, { fontFamily: 'Inter, sans-serif', fontSize: '12px', fontStyle: '600', color: hex(s.color.body) })
         .setOrigin(0.5, 1)
@@ -518,11 +551,167 @@ export class GameScene extends Phaser.Scene {
     return label
   }
 
+  // ---------- Partida en línea ----------
+
+  // Girar: sin conexión se gira aquí mismo; en línea se le pide al servidor
+  private steer(d: Cell) {
+    if (!this.online) {
+      this.player.turn(d)
+      return
+    }
+    if (!this.player.alive) return
+    const i = DIR_CELLS.findIndex((c) => c.x === d.x && c.y === d.y)
+    if (i >= 0) girar(i as DirIndex)
+  }
+
+  private setupNet() {
+    const socket = getSocket()
+    const onState = (st: StatePayload) => this.applyState(st)
+    const onRoster = (r: RosterEntry[]) => this.applyRoster(r)
+    const onFeed = (f: FeedMsg) => this.feed(f.text, f.ids.includes(online.you))
+    const onEvent = (e: GameEvent) => this.applyEvent(e)
+    socket.on('estado', onState)
+    socket.on('roster', onRoster)
+    socket.on('feed', onFeed)
+    socket.on('evento', onEvent)
+    socket.emit('sync') // pide la lista de jugadores y el estado actual
+    this.onExit(() => {
+      socket.off('estado', onState)
+      socket.off('roster', onRoster)
+      socket.off('feed', onFeed)
+      socket.off('evento', onEvent)
+    })
+  }
+
+  private applyRoster(list: RosterEntry[]) {
+    this.roster.clear()
+    for (const r of list) this.roster.set(r.id, r)
+    for (const [id, s] of this.remote) {
+      const r = this.roster.get(id)
+      if (!r) continue
+      s.color = { ...r.colors }
+      if (s.tag.name !== r.name) {
+        // Llegó el estado antes que la lista de jugadores: ahora se pone el nombre de verdad
+        s.tag = { name: r.name, country: r.country, level: r.bot ? r.level : 0 }
+        this.labels.get(s.id)?.destroy()
+        this.labels.delete(s.id)
+      } else {
+        this.labels.get(s.id)?.setColor(hex(s.color.body))
+      }
+    }
+    this.emitLeaderboard()
+  }
+
+  private applyState(st: StatePayload) {
+    const seen = new Set<number>()
+    for (const row of st.s) {
+      const id = row[0]
+      seen.add(id)
+      const cells: Cell[] = []
+      for (let i = 4; i < row.length; i++) cells.push({ x: row[i] % COLS, y: Math.floor(row[i] / COLS) })
+      if (cells.length === 0) continue
+
+      let s: Snake
+      if (id === online.you) {
+        s = this.player
+        if (this.playerServerId !== id) {
+          // Serpiente nueva (al entrar o al reaparecer): sin movimiento suave desde la anterior
+          this.playerServerId = id
+          s.cells = cells
+          s.prevTail = null
+          s.alive = true
+        }
+      } else {
+        let found = this.remote.get(id)
+        if (!found) {
+          const r = this.roster.get(id)
+          const tag = r ? { name: r.name, country: r.country, level: r.bot ? r.level : 0 } : { name: '…', country: '', level: 0 }
+          const color = r ? { ...r.colors } : colorsFromBase(COLORS.bots[id % COLORS.bots.length])
+          found = new Snake(tag, color, cells[cells.length - 1], DIRS.right, 1, false)
+          found.cells = cells
+          this.remote.set(id, found)
+        }
+        s = found
+      }
+      // Movimiento suave: la cola anterior permite dibujar el paso a medio camino
+      if (s.cells !== cells) {
+        const oldTail = s.cells[0]
+        const oldHead = s.cells[s.cells.length - 1]
+        const head = cells[cells.length - 1]
+        s.prevTail = oldHead.x !== head.x || oldHead.y !== head.y ? oldTail : null
+        s.cells = cells
+      }
+      s.dir = DIR_CELLS[row[1] & 3] ?? s.dir
+      s.ghost = row[1] >= 4
+      s.nextDir = s.dir
+      s.score = row[2]
+      s.kills = row[3]
+    }
+
+    // Las que ya no están murieron o salieron de la sala
+    for (const [id, s] of this.remote) {
+      if (seen.has(id)) continue
+      explodeBody(this.burst, s.cells, s.color.body)
+      this.labels.get(s.id)?.destroy()
+      this.labels.delete(s.id)
+      this.remote.delete(id)
+    }
+    this.bots = [...this.remote.values()]
+
+    this.foods = st.f.map((v) => {
+      const golden = v < 0
+      const i = golden ? -v - 1 : v
+      return { x: i % COLS, y: Math.floor(i / COLS), golden }
+    })
+    this.elapsed = 0
+    this.renderFood()
+    this.emitHud()
+    this.emitLeaderboard()
+  }
+
+  private applyEvent(e: GameEvent) {
+    if (e.type === 'eat') {
+      this.player.foodsEaten++
+      EventBus.emit(EVENTS.FOOD_EATEN, { puntos: e.puntos, dorada: e.dorada, total: e.total })
+    } else if (e.type === 'kill') {
+      EventBus.emit(EVENTS.BOT_KILLED, e.name)
+    } else if (e.type === 'died') {
+      this.gameOverOnline(e.stats)
+    }
+  }
+
+  private gameOverOnline(st: DiedStats) {
+    if (this.over) return
+    this.over = true
+    this.player.alive = false
+    this.labels.get(this.player.id)?.destroy()
+    this.labels.delete(this.player.id)
+    const { score: puntos, length: tamano } = st
+    EventBus.emit(
+      EVENTS.SNAKE_DIED,
+      st.killedBy ? { puntos, tamano, causa: 'jugador', eliminadoPor: st.killedBy } : { puntos, tamano, causa: st.causa === 'jugador' ? 'cuerpo' : st.causa },
+    )
+    const stats: GameOverStats = {
+      mode: 'online',
+      score: st.score,
+      length: st.length,
+      botsKilled: st.kills,
+      foodsEaten: st.foodsEaten,
+      durationMs: st.durationMs,
+      killedBy: st.killedBy,
+      rank: st.rank,
+      players: st.players,
+    }
+    const data: GameOverData = { stats, body: [...this.player.cells], color: this.player.color.body }
+    this.scene.launch('GameOverScene', data)
+    this.scene.pause()
+  }
+
   // ---------- Controles y comunicación con Vue ----------
 
   private setupInput() {
     const keys = this.input.keyboard!
-    const bind = (names: string[], d: Cell) => names.forEach((k) => keys.on(`keydown-${k}`, () => this.player.turn(d)))
+    const bind = (names: string[], d: Cell) => names.forEach((k) => keys.on(`keydown-${k}`, () => this.steer(d)))
     bind(['UP', 'W'], DIRS.up)
     bind(['DOWN', 'S'], DIRS.down)
     bind(['LEFT', 'A'], DIRS.left)
@@ -537,15 +726,15 @@ export class GameScene extends Phaser.Scene {
       const dy = p.y - start.y
       start = null
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return
-      if (Math.abs(dx) > Math.abs(dy)) this.player.turn(dx > 0 ? DIRS.right : DIRS.left)
-      else this.player.turn(dy > 0 ? DIRS.down : DIRS.up)
+      if (Math.abs(dx) > Math.abs(dy)) this.steer(dx > 0 ? DIRS.right : DIRS.left)
+      else this.steer(dy > 0 ? DIRS.down : DIRS.up)
     })
   }
 
   private setupEvents() {
     const onPause = () => (this.paused = true)
     const onResume = () => (this.paused = false)
-    const onTurn = (d: Direction) => this.player.turn(DIRS[d])
+    const onTurn = (d: Direction) => this.steer(DIRS[d])
     const onSkin = (skin: SkinChangedPayload) => this.applySkin(skin)
     EventBus.on(EVENTS.PAUSE, onPause)
     EventBus.on(EVENTS.RESUME, onResume)
@@ -563,6 +752,13 @@ export class GameScene extends Phaser.Scene {
   // Los bots dejan de usar el color que más se parece al de la skin, para que nadie se confunda.
   private applySkin(skin: SkinChangedPayload) {
     this.player.color = colorsFromSkin(skin)
+    if (this.online) {
+      // Los demás jugadores verán tu skin; los colores de los otros los decide el servidor
+      enviarSkin(this.player.color)
+      this.labels.get(this.player.id)?.setColor(hex(this.player.color.body))
+      this.emitLeaderboard()
+      return
+    }
     const avoid = closestColor(COLORS.bots, this.player.color.body)
     this.botPalette = COLORS.bots.filter((c) => c !== avoid)
     for (const bot of this.bots) {
@@ -609,7 +805,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private rankingRows(): LeaderboardRow[] {
-    return [this.player, ...this.bots.filter((b) => b.alive)]
+    const me = this.online && !this.player.alive && !this.over ? [] : [this.player]
+    return [...me, ...this.bots.filter((b) => b.alive)]
       .map((s) => ({
         id: s.id,
         name: s.tag.name,

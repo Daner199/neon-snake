@@ -6,6 +6,7 @@ import CapaJuego from './CapaJuego.vue'
 
 // Menú de pausa: continuar, sonido, skin y salir.
 // Elegir una skin solo cambia Pinia; GameView lo ve y se lo dice a Phaser con skin-changed.
+defineProps<{ enLinea?: boolean }>()
 const emit = defineEmits<{ continuar: [] }>()
 const settings = useSettingsStore()
 const skins = useSkinsStore()
@@ -15,7 +16,8 @@ const disponibles = computed(() => skins.catalogo.filter((s) => s.estado !== 'bl
 </script>
 
 <template>
-  <CapaJuego titulo="PAUSA">
+  <CapaJuego :titulo="enLinea ? 'MENÚ' : 'PAUSA'">
+    <p v-if="enLinea" class="aviso-linea">En línea la partida sigue mientras ves este menú</p>
     <button class="btn btn--primario" type="button" @click="emit('continuar')">Continuar</button>
     <button class="btn" type="button" :aria-pressed="settings.muted" @click="settings.toggleMute()">
       {{ settings.muted ? '🔇 Sonido apagado' : '🔊 Sonido encendido' }}
@@ -42,6 +44,12 @@ const disponibles = computed(() => skins.catalogo.filter((s) => s.estado !== 'bl
 </template>
 
 <style scoped>
+.aviso-linea {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-oro);
+  text-align: center;
+}
 .btn {
   width: 100%;
 }

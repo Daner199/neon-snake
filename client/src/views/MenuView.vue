@@ -19,6 +19,7 @@ const skins = useSkinsStore()
     <p class="lema">Come, crece y haz chocar a los demás jugadores contra tu cola.</p>
     <RouterLink class="btn btn--primario btn--grande" to="/jugar/arena" @click="enterGameScreen">Jugar ahora</RouterLink>
     <nav class="opciones">
+      <RouterLink class="btn btn--online" to="/online"><span class="en-vivo" aria-hidden="true"></span>Jugar en línea</RouterLink>
       <RouterLink class="btn" to="/modos">Elegir modo</RouterLink>
       <RouterLink class="btn btn--skins" to="/skins">
         Skins
@@ -75,6 +76,28 @@ const skins = useSkinsStore()
   width: min(340px, 100%);
   min-height: 64px;
   font-size: 20px;
+}
+.btn--online {
+  gap: 10px;
+  border-color: var(--color-peligro);
+}
+.en-vivo {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-peligro);
+  box-shadow: 0 0 10px var(--color-peligro);
+  animation: vivo 1.4s ease-in-out infinite;
+}
+@keyframes vivo {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .en-vivo {
+    animation: none;
+  }
 }
 .btn--skins {
   gap: 12px;

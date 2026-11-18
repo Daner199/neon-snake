@@ -20,6 +20,14 @@ export default createRouter({
           hash: to.hash,
         },
     },
+    { path: '/online', name: 'online', component: () => import('./views/OnlineView.vue') },
+    {
+      // Partida en línea: el código de la sala va en la URL, así se puede compartir el enlace
+      path: '/online/:codigo',
+      name: 'online-partida',
+      component: () => import('./views/GameView.vue'),
+      beforeEnter: (to) => /^[A-Za-z0-9]{4}$/.test(String(to.params.codigo)) || { name: 'online' },
+    },
     { path: '/skins', name: 'skins', component: () => import('./views/SkinsView.vue') },
     { path: '/ranking', name: 'ranking', component: () => import('./views/RankingView.vue') },
     { path: '/login', name: 'login', component: () => import('./views/LoginView.vue') },

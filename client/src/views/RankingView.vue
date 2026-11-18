@@ -11,8 +11,11 @@ interface RankingRow {
   botsKilled: number
 }
 
-// Una pestaña por modo de src/data/modos.json
-const TABS = MODOS.map((m) => ({ mode: m.id, label: m.nombre, rivals: m.jugadores > 0 }))
+// Una pestaña por modo de src/data/modos.json y otra para las partidas en línea
+const TABS = [
+  ...MODOS.map((m) => ({ mode: m.id, label: m.nombre, rivals: m.jugadores > 0 })),
+  { mode: 'online', label: 'En línea', rivals: true },
+]
 
 const auth = useAuthStore()
 const mode = ref(TABS[0].mode)

@@ -45,6 +45,12 @@ sessionsRouter.post('/', requireAuth, saveLimit, async (req, res) => {
     return
   }
 
+  // Las partidas en línea no se mandan desde el navegador: las guarda el servidor, que vio toda la partida
+  if (mode === 'online') {
+    res.status(400).json({ error: 'Las partidas en línea se guardan solas' })
+    return
+  }
+
   const seconds = durationMs / 1000
   const impossible =
     score > seconds * MAX_POINTS_PER_SECOND + POINTS_MARGIN ||
