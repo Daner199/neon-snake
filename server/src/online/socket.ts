@@ -5,7 +5,7 @@ import { Router } from 'express'
 import { Server } from 'socket.io'
 import { verifyToken } from '../services/tokens.js'
 import { Room, type GameServer, type GameSocket } from './Room.js'
-import { NET, SOCKET_PATH, type DirIndex, type NetColors, type SalaPublica } from './shared/protocol.js'
+import { NET, NET_ERRORS, SOCKET_PATH, type DirIndex, type NetColors, type SalaPublica } from './shared/protocol.js'
 
 const MAX_ROOMS = 50
 const EMPTY_ROOM_TTL_MS = 60_000 // una sala sin nadie se cierra al minuto
@@ -39,13 +39,6 @@ function cleanColors(v: unknown): NetColors | null {
   const c = v as Record<string, unknown>
   if (!isColor(c.head) || !isColor(c.body) || !isColor(c.stripe) || !isColor(c.glow)) return null
   return { head: c.head, body: c.body, stripe: c.stripe, glow: c.glow }
-}
-
-function cleanName(v: unknown): string | null {
-  if (typeof v !== 'string') return null
-  // eslint-disable-next-line no-control-regex
-  const name = v.replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 16)
-  return name.length >= 2 ? name : null
 }
 
 const cleanCode = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase().slice(0, 8) : '')
@@ -127,12 +120,11 @@ export function attachOnline(httpServer: HttpServer, corsOrigins: string[]) {
       if (!target) return ack({ ok: false, error: 'No existe una sala con ese código' })
       const colors = cleanColors(req?.colors)
       if (!colors) return ack({ ok: false, error: 'Datos no válidos' })
-      // Con sesión iniciada se juega con el nombre de la cuenta y la partida entra al ranking
+      // En línea solo se juega con cuenta: se usa su nombre y la partida entra al ranking
       const user = typeof req?.token === 'string' ? verifyToken(req.token) : null
-      const name = user?.username ?? cleanName(req?.name)
-      if (!name) return ack({ ok: false, error: 'Escribe un nombre de al menos 2 letras' })
+      if (!user) return ack({ ok: false, error: NET_ERRORS.SESION })
       leaveRoom()
-      const reply = target.join(socket, name, colors, user)
+      const reply = target.join(socket, user.username, colors, user)
       if (reply.ok) room = target
       ack(reply)
     })

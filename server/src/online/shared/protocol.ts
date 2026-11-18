@@ -16,6 +16,11 @@ export const NET = {
   CODIGO_LARGO: 4,
 } as const
 
+// Errores que el navegador reconoce para actuar (por ejemplo, mandar a iniciar sesión)
+export const NET_ERRORS = {
+  SESION: 'Inicia sesión para jugar en línea',
+} as const
+
 // Socket.IO va bajo /api para pasar por el mismo proxy de nginx (y de Vite en desarrollo)
 export const SOCKET_PATH = '/api/socket.io'
 
@@ -58,9 +63,8 @@ export interface StatePayload {
 
 export interface JoinRequest {
   code: string
-  name: string
   colors: NetColors
-  token?: string | null // sesión iniciada: la partida entra al ranking "En línea"
+  token: string // obligatorio: en línea siempre se juega con cuenta y la partida entra al ranking
 }
 
 export type Reply<T> = ({ ok: true } & T) | { ok: false; error: string }

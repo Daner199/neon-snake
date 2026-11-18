@@ -2,7 +2,7 @@
 // Pantalla de juego: arma la pantalla (lienzo de Phaser, HUD, mensajes, pausa y Game Over),
 // escucha el EventBus y pasa los datos a Pinia y a los componentes. No toca nada de Phaser.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api, ApiError } from '../api'
 import AvisoSkin from '../components/AvisoSkin.vue'
 import GameCanvas from '../components/GameCanvas.vue'
@@ -21,7 +21,8 @@ import type {
   SnakeDiedPayload,
 } from '../events/names'
 import { colorsFromSkin } from '../game/colors'
-import { nombreGuardado, online, reaparecer, salir, unirse } from '../online/session'
+import { NET_ERRORS } from '../online/protocol'
+import { online, reaparecer, salir, unirse } from '../online/session'
 import { enterGameScreen, leaveGameScreen } from '../screen'
 import { sounds } from '../sound'
 import { useAuthStore } from '../stores/auth'
@@ -30,6 +31,7 @@ import { useSettingsStore } from '../stores/settings'
 import { useSkinsStore } from '../stores/skins'
 
 const route = useRoute()
+const router = useRouter()
 // En línea (/online/K7Q2): el servidor mueve la partida; las reglas son las del modo Arena
 const enLinea = route.name === 'online-partida'
 const codigo = String(route.params.codigo ?? '').toUpperCase()
@@ -203,9 +205,16 @@ async function entrarSala() {
   const { colorCabeza, colorCuerpo, colorFranja, colorBrillo } = skins.skinActual
   const colors = colorsFromSkin({ colorCabeza, colorCuerpo, colorFranja, colorBrillo })
   try {
-    await unirse(codigo, auth.user?.username ?? nombreGuardado(), colors, auth.token)
+    if (!auth.token) throw new Error(NET_ERRORS.SESION)
+    await unirse(codigo, colors, auth.token)
     conexion.value = 'lista'
   } catch (e) {
+    // La sesión caducó: a iniciar sesión otra vez y de vuelta a esta sala
+    if (e instanceof Error && e.message === NET_ERRORS.SESION) {
+      auth.logout()
+      router.replace({ name: 'login', query: { volver: route.fullPath } })
+      return
+    }
     conexion.value = 'error'
     conexionError.value = e instanceof Error ? e.message : 'No se pudo entrar a la sala'
   }

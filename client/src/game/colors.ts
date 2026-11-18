@@ -41,6 +41,16 @@ export function colorsFromSkin(skin: SkinColors): SnakeColors {
   }
 }
 
+// Qué tan distintos son dos colores (0 = iguales; por debajo de ~90 se confunden en la arena)
+export function colorDistance(a: number, b: number): number {
+  const [ar, ag, ab] = rgb(a)
+  const [br, bg, bb] = rgb(b)
+  return Math.sqrt((ar - br) ** 2 + (ag - bg) ** 2 + (ab - bb) ** 2)
+}
+
+// Colores de reserva para otra persona cuya skin se parece a la tuya (en línea)
+export const ALT_COLORS = [0xf2f5ff, 0x00ff9c, 0xff5ef0, 0x5ef1ff, 0xffb3d9, ...COLORS.bots]
+
 // El color de la lista que más se parece a "target" (distancia entre sus componentes rojo, verde y azul)
 export function closestColor(list: readonly number[], target: number): number {
   const [tr, tg, tb] = rgb(target)

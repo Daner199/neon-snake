@@ -104,7 +104,7 @@ neon-snake/
 
 ## Multijugador en línea
 
-En el menú, **Jugar en línea** abre la pantalla de salas:
+En el menú, **Jugar en línea** abre la pantalla de salas. Para jugar en línea hay que **iniciar sesión** (si no, el juego te lleva al login y luego te devuelve a la sala): así cada partida entra al ranking con tu nombre de usuario.
 
 - **Partida rápida:** entras a la sala pública con más gente (o se crea una).
 - **Crear sala:** recibes un código de 4 letras (por ejemplo `K7Q2`). Puede ser pública (sale en la lista de salas abiertas) o privada, y con o sin jugadores de la computadora que completan la sala hasta 8 serpientes.
@@ -115,7 +115,8 @@ Cómo funciona:
 - **El servidor manda.** `server/src/online/Arena.ts` mueve todas las serpientes cada 110 ms, revisa los choques y reparte la comida, con las mismas reglas que el modo Arena. El navegador solo envía los giros (`girar`) y dibuja lo que recibe (`estado`). Así nadie puede hacer trampa y todos ven lo mismo.
 - **Mensajes pequeños.** Cada paso viaja como números (`client/src/online/protocol.ts`): unas 600 letras por paso con 8 serpientes. Los nombres y colores se mandan solo cuando alguien entra o sale (`roster`).
 - **Protección al aparecer.** Durante 3 segundos tu serpiente parpadea: no choca con nadie y nadie la caza.
-- **Ranking En línea.** Con sesión iniciada, el servidor guarda la partida él mismo al morir (no la manda el navegador), y aparece en la pestaña *En línea* del ranking.
+- **Ranking En línea.** El servidor guarda cada partida él mismo al morir (no la manda el navegador), y aparece en la pestaña *En línea* del ranking.
+- **Colores distintos.** Si dos personas usan la misma skin (por ejemplo, la verde inicial), cada una se ve a sí misma con su skin y ve a la otra de otro color.
 - **Salas.** Hasta 8 personas por sala y 50 salas por servidor. Una sala vacía se cierra al minuto. Si se corta la conexión, el juego vuelve a entrar solo a la misma sala.
 - **Mismo puerto.** Socket.IO vive en `/api/socket.io`, así pasa por el proxy de nginx (que ya deja pasar WebSocket) y el de Vite en desarrollo. No hace falta abrir otro puerto ni cambiar nada en Render o Railway.
 

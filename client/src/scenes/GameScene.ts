@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { think } from '../game/bots/BotBrain'
 import { cellIndex, inside, type Grid } from '../game/grid'
 import { buscarModo, MODOS, SKINS, type Modo } from '../data'
-import { closestColor, colorsFromBase, colorsFromSkin, hex, mix } from '../game/colors'
+import { ALT_COLORS, closestColor, colorDistance, colorsFromBase, colorsFromSkin, hex, mix, type SnakeColors } from '../game/colors'
 import {
   BOT_RESPAWN_MS,
   CELL,
@@ -583,13 +583,23 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  // Colores con los que veo a otra serpiente: los suyos, salvo que se parezcan a los míos
+  // (por ejemplo, los dos con la skin verde inicial). Entonces la veo de otro color.
+  private colorsFor(r: RosterEntry): SnakeColors {
+    const mine = this.player.color.body
+    if (colorDistance(r.colors.body, mine) >= 90) return { ...r.colors }
+    const used = [...this.roster.values()].filter((o) => o.id !== r.id && o.id !== online.you).map((o) => o.colors.body)
+    const free = ALT_COLORS.find((c) => colorDistance(c, mine) >= 90 && used.every((u) => colorDistance(c, u) >= 90))
+    return colorsFromBase(free ?? ALT_COLORS[0])
+  }
+
   private applyRoster(list: RosterEntry[]) {
     this.roster.clear()
     for (const r of list) this.roster.set(r.id, r)
     for (const [id, s] of this.remote) {
       const r = this.roster.get(id)
       if (!r) continue
-      s.color = { ...r.colors }
+      s.color = this.colorsFor(r)
       if (s.tag.name !== r.name) {
         // Llegó el estado antes que la lista de jugadores: ahora se pone el nombre de verdad
         s.tag = { name: r.name, country: r.country, level: r.bot ? r.level : 0 }
@@ -626,7 +636,7 @@ export class GameScene extends Phaser.Scene {
         if (!found) {
           const r = this.roster.get(id)
           const tag = r ? { name: r.name, country: r.country, level: r.bot ? r.level : 0 } : { name: '…', country: '', level: 0 }
-          const color = r ? { ...r.colors } : colorsFromBase(COLORS.bots[id % COLORS.bots.length])
+          const color = r ? this.colorsFor(r) : colorsFromBase(COLORS.bots[id % COLORS.bots.length])
           found = new Snake(tag, color, cells[cells.length - 1], DIRS.right, 1, false)
           found.cells = cells
           this.remote.set(id, found)
@@ -753,8 +763,9 @@ export class GameScene extends Phaser.Scene {
   private applySkin(skin: SkinChangedPayload) {
     this.player.color = colorsFromSkin(skin)
     if (this.online) {
-      // Los demás jugadores verán tu skin; los colores de los otros los decide el servidor
+      // Los demás jugadores verán tu skin; a los que se parezcan a ti los ves de otro color
       enviarSkin(this.player.color)
+      this.applyRoster([...this.roster.values()])
       this.labels.get(this.player.id)?.setColor(hex(this.player.color.body))
       this.emitLeaderboard()
       return

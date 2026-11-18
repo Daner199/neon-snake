@@ -21,7 +21,6 @@ export type GameClient = Socket<ServerToClient, ClientToServer>
 
 const ACK_TIMEOUT_MS = 10_000
 const PING_EVERY_MS = 2000
-const NAME_KEY = 'neon-snake-nombre'
 
 // Estado que se ve en Vue (HUD: código de sala y ping; Game Over: si se guardó)
 export const online = reactive({
@@ -41,7 +40,7 @@ export const online = reactive({
 let socket: GameClient | null = null
 let pingTimer: ReturnType<typeof setInterval> | undefined
 // Para volver a entrar solo si se corta la conexión a mitad de partida
-let lastJoin: { name: string; colors: NetColors; token: string | null } | null = null
+let lastJoin: { colors: NetColors; token: string } | null = null
 
 export function getSocket(): GameClient {
   if (socket) return socket
@@ -51,7 +50,7 @@ export function getSocket(): GameClient {
     // Se cortó y volvió: se entra otra vez a la misma sala (con una serpiente nueva)
     if (online.reconnecting && lastJoin && online.code) {
       online.reconnecting = false
-      unirse(online.code, lastJoin.name, lastJoin.colors, lastJoin.token).catch(() => (online.joined = false))
+      unirse(online.code, lastJoin.colors, lastJoin.token).catch(() => (online.joined = false))
     }
   })
   s.on('disconnect', () => {
@@ -94,9 +93,10 @@ export async function partidaRapida(): Promise<string> {
   return unwrap(r).code
 }
 
-export async function unirse(code: string, name: string, colors: NetColors, token: string | null): Promise<void> {
-  const r = unwrap(await ask((s) => s.emitWithAck('sala:unirse', { code, name, colors, token }) as Promise<JoinReply>))
-  lastJoin = { name, colors, token }
+// En línea siempre se juega con cuenta: el token identifica al jugador y su partida va al ranking
+export async function unirse(code: string, colors: NetColors, token: string): Promise<void> {
+  const r = unwrap(await ask((s) => s.emitWithAck('sala:unirse', { code, colors, token }) as Promise<JoinReply>))
+  lastJoin = { colors, token }
   Object.assign(online, {
     code: r.code,
     you: r.you,
@@ -154,23 +154,4 @@ export async function salasPublicas(): Promise<SalaPublica[]> {
   const res = await fetch('/api/online/salas')
   if (!res.ok) throw new Error('No se pudo cargar la lista de salas')
   return (await res.json()) as SalaPublica[]
-}
-
-// Nombre para jugar sin cuenta: se recuerda en este navegador
-export function nombreGuardado(): string {
-  try {
-    const saved = localStorage.getItem(NAME_KEY)
-    if (saved) return saved
-  } catch {
-    // sin almacenamiento local
-  }
-  return 'Invitado' + Math.floor(100 + Math.random() * 900)
-}
-
-export function guardarNombre(name: string) {
-  try {
-    localStorage.setItem(NAME_KEY, name)
-  } catch {
-    // sin almacenamiento local: solo no se recuerda
-  }
 }

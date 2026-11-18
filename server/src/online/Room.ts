@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { getRanking } from '../services/ranking.js'
 import type { TokenUser } from '../services/tokens.js'
 import { Arena, type ArenaSnake } from './Arena.js'
+import { BOT_COLORS, HUMAN_COLORS } from './names.js'
 import {
   NET,
   type CausaMuerteNet,
@@ -22,12 +23,21 @@ interface Player {
   socket: GameSocket
   snakeId: number
   name: string
-  colors: NetColors
-  user: TokenUser | null
+  skin: NetColors // colores que eligió (su skin)
+  colors: NetColors // con los que lo ven los demás
+  user: TokenUser
   startedAt: number // cuándo empezó su vida actual (ms)
 }
 
 const MIN_SAVE_MS = 1000
+
+// Qué tan distintos son dos colores (distancia entre sus componentes rojo, verde y azul)
+function colorDistance(a: number, b: number): number {
+  const dr = ((a >> 16) & 255) - ((b >> 16) & 255)
+  const dg = ((a >> 8) & 255) - ((b >> 8) & 255)
+  const db = (a & 255) - (b & 255)
+  return Math.sqrt(dr * dr + dg * dg + db * db)
+}
 
 export class Room {
   readonly arena: Arena
@@ -70,11 +80,14 @@ export class Room {
 
   // ---------- Personas ----------
 
-  join(socket: GameSocket, name: string, colors: NetColors, user: TokenUser | null): JoinReply {
+  join(socket: GameSocket, name: string, skin: NetColors, user: TokenUser): JoinReply {
     if (this.full) return { ok: false, error: 'La sala está llena' }
+    // Si alguien ya trae los mismos colores (por ejemplo, los dos con la skin inicial verde),
+    // los demás te ven con otro color para no confundirse. Tú te sigues viendo con tu skin.
+    const colors = this.distinctColors(skin, null)
     const snake = this.arena.addHuman(name, '', colors)
     if (!snake) return { ok: false, error: 'No hay espacio en la arena, prueba en unos segundos' }
-    this.players.set(socket.id, { socket, snakeId: snake.id, name, colors, user, startedAt: Date.now() })
+    this.players.set(socket.id, { socket, snakeId: snake.id, name, skin, colors, user, startedAt: Date.now() })
     socket.join(this.code)
     this.start()
     return { ok: true, code: this.code, you: snake.id, tickMs: NET.TICK_MS, publica: this.publica, conIA: this.arena.conIA }
@@ -87,6 +100,7 @@ export class Room {
     const old = this.arena.snakes.get(p.snakeId)
     if (old?.alive) return p.snakeId // sigue viva: no hace falta
     this.arena.remove(p.snakeId)
+    p.colors = this.distinctColors(p.skin, null)
     const snake = this.arena.addHuman(p.name, '', p.colors)
     if (!snake) return null
     p.snakeId = snake.id
@@ -112,11 +126,20 @@ export class Room {
     if (p) this.arena.turn(p.snakeId, d)
   }
 
-  setColors(socket: GameSocket, colors: NetColors) {
+  setColors(socket: GameSocket, skin: NetColors) {
     const p = this.players.get(socket.id)
     if (!p) return
-    p.colors = colors
-    this.arena.setColors(p.snakeId, colors)
+    p.skin = skin
+    p.colors = this.distinctColors(skin, p.snakeId)
+    this.arena.setColors(p.snakeId, p.colors)
+  }
+
+  // Los colores de la skin, o uno libre de la lista si otra serpiente de la sala ya se le parece
+  private distinctColors(skin: NetColors, selfId: number | null): NetColors {
+    const used = [...this.arena.snakes.values()].filter((s) => s.id !== selfId).map((s) => s.colors.body)
+    const clash = (body: number) => used.some((u) => colorDistance(u, body) < 90)
+    if (!clash(skin.body)) return skin
+    return [...HUMAN_COLORS, ...BOT_COLORS].find((c) => !clash(c.body)) ?? skin
   }
 
   sync(socket: GameSocket) {
@@ -155,7 +178,7 @@ export class Room {
   private playerDied(p: Player, victim: ArenaSnake, killer: ArenaSnake | null, causa: CausaMuerteNet) {
     const durationMs = Date.now() - p.startedAt
     const { rank, players } = this.arena.rankOf(victim)
-    const guardada: DiedStats['guardada'] = !p.user ? 'invitado' : durationMs < MIN_SAVE_MS ? 'muy-corta' : 'guardando'
+    const guardada: DiedStats['guardada'] = durationMs < MIN_SAVE_MS ? 'muy-corta' : 'guardando'
     const stats: DiedStats = {
       score: victim.score,
       length: victim.cells.length,
@@ -170,7 +193,7 @@ export class Room {
       position: null,
     }
     p.socket.emit('evento', { type: 'died', stats })
-    if (guardada === 'guardando' && p.user) this.save(p, p.user, stats)
+    if (guardada === 'guardando') this.save(p, p.user, stats)
   }
 
   // El servidor vio toda la partida: la guarda él mismo, sin las reglas anti-trampas del cliente

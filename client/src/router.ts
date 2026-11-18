@@ -1,5 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { buscarModo } from './data'
+import { useAuthStore } from './stores/auth'
+
+// En línea solo se juega con cuenta (la partida siempre entra al ranking).
+// Sin sesión se va a iniciar sesión y, al terminar, vuelve a donde quería entrar.
+const conSesion = (to: { fullPath: string }) =>
+  useAuthStore().loggedIn || { name: 'login', query: { volver: to.fullPath } }
 import MenuView from './views/MenuView.vue'
 
 export default createRouter({
@@ -20,13 +26,13 @@ export default createRouter({
           hash: to.hash,
         },
     },
-    { path: '/online', name: 'online', component: () => import('./views/OnlineView.vue') },
+    { path: '/online', name: 'online', component: () => import('./views/OnlineView.vue'), beforeEnter: conSesion },
     {
       // Partida en línea: el código de la sala va en la URL, así se puede compartir el enlace
       path: '/online/:codigo',
       name: 'online-partida',
       component: () => import('./views/GameView.vue'),
-      beforeEnter: (to) => /^[A-Za-z0-9]{4}$/.test(String(to.params.codigo)) || { name: 'online' },
+      beforeEnter: (to) => (/^[A-Za-z0-9]{4}$/.test(String(to.params.codigo)) ? conSesion(to) : { name: 'online' }),
     },
     { path: '/skins', name: 'skins', component: () => import('./views/SkinsView.vue') },
     { path: '/ranking', name: 'ranking', component: () => import('./views/RankingView.vue') },

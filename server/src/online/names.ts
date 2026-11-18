@@ -32,3 +32,12 @@ export const BOT_COLORS: NetColors[] = BASE_COLORS.map((c) => ({
   stripe: mix(c, BACKGROUND, 0.28),
   glow: c,
 }))
+
+// Colores para personas cuya skin choca con la de otra en la sala (distintos de los bots)
+const HUMAN_BASES = [0xf2f5ff, 0x00ff9c, 0xff5ef0, 0x5ef1ff, 0xffb3d9]
+export const HUMAN_COLORS: NetColors[] = HUMAN_BASES.map((c) => ({
+  head: mix(c, WHITE, 0.35),
+  body: c,
+  stripe: mix(c, BACKGROUND, 0.28),
+  glow: c,
+}))

@@ -3,7 +3,7 @@
 // Aquí solo se consigue el código de la sala; GameView es quien entra y juega.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { crearSala, guardarNombre, nombreGuardado, partidaRapida, salasPublicas } from '../online/session'
+import { crearSala, partidaRapida, salasPublicas } from '../online/session'
 import type { SalaPublica } from '../online/protocol'
 import { enterGameScreen } from '../screen'
 import { useAuthStore } from '../stores/auth'
@@ -11,7 +11,6 @@ import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const auth = useAuthStore()
 
-const nombre = ref(auth.user?.username ?? nombreGuardado())
 const codigo = ref('')
 const publica = ref(true)
 const conIA = ref(true)
@@ -20,20 +19,14 @@ const error = ref('')
 const lento = ref(false) // el servidor gratis tarda en despertar: se avisa
 const salas = ref<SalaPublica[]>([])
 
-const nombreValido = computed(() => auth.loggedIn || nombre.value.trim().length >= 2)
 const codigoValido = computed(() => /^[A-Za-z0-9]{4}$/.test(codigo.value.trim()))
 
 function entrar(code: string) {
-  if (!auth.loggedIn) guardarNombre(nombre.value.trim())
   enterGameScreen()
   router.push({ name: 'online-partida', params: { codigo: code.toUpperCase() } })
 }
 
 async function hacer(que: 'rapida' | 'crear', fn: () => Promise<string>) {
-  if (!nombreValido.value) {
-    error.value = 'Escribe un nombre de al menos 2 letras'
-    return
-  }
   error.value = ''
   ocupado.value = que
   const aviso = setTimeout(() => (lento.value = true), 3000)
@@ -50,13 +43,7 @@ async function hacer(que: 'rapida' | 'crear', fn: () => Promise<string>) {
 
 const rapida = () => hacer('rapida', partidaRapida)
 const crear = () => hacer('crear', () => crearSala({ publica: publica.value, conIA: conIA.value }))
-function unirse(code = codigo.value.trim()) {
-  if (!nombreValido.value) {
-    error.value = 'Escribe un nombre de al menos 2 letras'
-    return
-  }
-  entrar(code)
-}
+const unirse = (code = codigo.value.trim()) => entrar(code)
 
 // Lista de salas abiertas, actualizada cada pocos segundos
 let timer: ReturnType<typeof setInterval> | undefined
@@ -82,13 +69,9 @@ onBeforeUnmount(() => clearInterval(timer))
     </header>
 
     <section class="tarjeta">
-      <label v-if="!auth.loggedIn" class="campo">
-        <span>Tu nombre en la arena</span>
-        <input v-model="nombre" maxlength="16" autocomplete="nickname" placeholder="Ej.: Daner" />
-      </label>
-      <p v-else class="suave">Jugarás como <strong>{{ auth.user?.username }}</strong>. Tus partidas entran al ranking En línea.</p>
-      <p v-if="!auth.loggedIn" class="suave pequeno">
-        <RouterLink to="/login">Inicia sesión</RouterLink> para que tus partidas en línea entren al ranking.
+      <p class="suave">
+        Jugarás como <strong class="usuario">{{ auth.user?.username }}</strong>. Todas tus partidas en línea entran al
+        ranking En línea.
       </p>
       <button class="btn btn--primario grande" type="button" :disabled="!!ocupado" @click="rapida">
         {{ ocupado === 'rapida' ? 'Buscando sala…' : 'Partida rápida' }}
@@ -191,6 +174,9 @@ onBeforeUnmount(() => clearInterval(timer))
 }
 .pequeno {
   font-size: 14px;
+}
+.usuario {
+  color: var(--color-primario);
 }
 .campo {
   display: flex;
